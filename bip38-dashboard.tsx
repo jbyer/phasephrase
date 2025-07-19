@@ -25,8 +25,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Server, Monitor, Wifi, WifiOff, RefreshCw, PowerOff, BellRing } from "lucide-react"
 
 export default function Component() {
+  const [isMounted, setIsMounted] = useState(false)
   const [isRunning, setIsRunning] = useState(true)
-  const [currentTime, setCurrentTime] = useState(new Date())
+  const [currentTime, setCurrentTime] = useState<Date | null>(null)
 
   // Mock data - replace with real data from your application
   const [dashboardData, setDashboardData] = useState({
@@ -209,7 +210,16 @@ export default function Component() {
   const [selectedAlert, setSelectedAlert] = useState<any | null>(null)
   const [showAlertDetailsDialog, setShowAlertDetailsDialog] = useState(false)
 
+  // Handle client-side mounting
   useEffect(() => {
+    setIsMounted(true)
+    setCurrentTime(new Date())
+  }, [])
+
+  // Handle real-time updates only on client side
+  useEffect(() => {
+    if (!isMounted) return
+
     const timer = setInterval(() => {
       setCurrentTime(new Date())
 
@@ -224,7 +234,7 @@ export default function Component() {
     }, 2000)
 
     return () => clearInterval(timer)
-  }, [isRunning])
+  }, [isRunning, isMounted])
 
   const filteredPassphrases = passphrases.filter((p) => {
     const matchesSearch =
@@ -454,23 +464,43 @@ export default function Component() {
   }
 
   const formatTimeAgo = (date: Date) => {
-    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000)
-    let interval = seconds / 31536000
-    if (interval > 1) return Math.floor(interval) + " years ago"
-    interval = seconds / 2592000
-    if (interval > 1) return Math.floor(interval) + " months ago"
-    interval = seconds / 86400
-    if (interval > 1) return Math.floor(interval) + " days ago"
-    interval = seconds / 3600
-    if (interval > 1) return Math.floor(interval) + " hours ago"
-    interval = seconds / 60
-    if (interval > 1) return Math.floor(interval) + " minutes ago"
-    return Math.floor(seconds) + " seconds ago"
+    if (!isMounted || !date) return "Loading..."
+
+    try {
+      const now = currentTime || new Date()
+      const seconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+      let interval = seconds / 31536000
+      if (interval > 1) return Math.floor(interval) + " years ago"
+      interval = seconds / 2592000
+      if (interval > 1) return Math.floor(interval) + " months ago"
+      interval = seconds / 86400
+      if (interval > 1) return Math.floor(interval) + " days ago"
+      interval = seconds / 3600
+      if (interval > 1) return Math.floor(interval) + " hours ago"
+      interval = seconds / 60
+      if (interval > 1) return Math.floor(interval) + " minutes ago"
+      return Math.floor(seconds) + " seconds ago"
+    } catch (error) {
+      return "Unknown"
+    }
   }
 
   const handleAlertClick = (alert: any) => {
     setSelectedAlert(alert)
     setShowAlertDetailsDialog(true)
+  }
+
+  // Show loading state during hydration
+  if (!isMounted) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-3 sm:p-6">
+        <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-gray-600">Loading dashboard...</div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -494,7 +524,9 @@ export default function Component() {
             >
               {isRunning ? "RUNNING" : "PAUSED"}
             </Badge>
-            <div className="text-gray-500 text-xs sm:text-sm">{currentTime.toLocaleTimeString()}</div>
+            <div className="text-gray-500 text-xs sm:text-sm">
+              {currentTime ? currentTime.toLocaleTimeString() : "Loading..."}
+            </div>
           </div>
         </div>
 
@@ -1391,7 +1423,13 @@ export default function Component() {
 
                   <Label className="text-gray-700 font-medium">Timestamp:</Label>
                   <span className="text-gray-900">
-                    {selectedAlert.timestamp.toLocaleString()} ({formatTimeAgo(selectedAlert.timestamp)})
+                    {isMounted && selectedAlert.timestamp ? (
+                      <>
+                        {selectedAlert.timestamp.toLocaleString()} ({formatTimeAgo(selectedAlert.timestamp)})
+                      </>
+                    ) : (
+                      "Loading..."
+                    )}
                   </span>
 
                   <Label className="text-gray-700 font-medium col-span-2">Description:</Label>
