@@ -1,4 +1,4 @@
-"use client"
+// "use client"
 
 import Component from "../bip38-dashboard"
 
