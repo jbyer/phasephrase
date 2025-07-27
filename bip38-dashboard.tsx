@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import type React from "react"
+
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
@@ -19,15 +21,57 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Plus, Trash2, Eye, EyeOff, Download, Upload } from "lucide-react"
+import {
+  Search,
+  Plus,
+  Trash2,
+  Eye,
+  EyeOff,
+  Download,
+  Upload,
+  FileText,
+  AlertCircle,
+  CheckCircle,
+  X,
+} from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Server, Monitor, Wifi, WifiOff, RefreshCw, PowerOff, BellRing } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+
+// File upload types and interfaces
+interface UploadedFile {
+  id: string
+  name: string
+  size: number
+  type: string
+  uploadDate: Date
+  status: "uploading" | "success" | "error"
+  errorMessage?: string
+  processedCount?: number
+}
+
+interface FileUploadProgress {
+  fileId: string
+  progress: number
+  status: "uploading" | "processing" | "complete" | "error"
+}
 
 export default function Component() {
   const [isMounted, setIsMounted] = useState(false)
   const [isRunning, setIsRunning] = useState(true)
   const [currentTime, setCurrentTime] = useState<Date | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // File upload states
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [uploadProgress, setUploadProgress] = useState<FileUploadProgress[]>([])
+  const [showUploadDialog, setShowUploadDialog] = useState(false)
+  const [dragActive, setDragActive] = useState(false)
+  const [uploadAlert, setUploadAlert] = useState<{
+    type: "success" | "error" | "info"
+    message: string
+  } | null>(null)
 
   // Mock data - replace with real data from your application
   const [dashboardData, setDashboardData] = useState({
@@ -210,6 +254,182 @@ export default function Component() {
   const [selectedAlert, setSelectedAlert] = useState<any | null>(null)
   const [showAlertDetailsDialog, setShowAlertDetailsDialog] = useState(false)
 
+  // File upload utility functions
+  const validateFile = (file: File): { isValid: boolean; error?: string } => {
+    const allowedTypes = [
+      "text/csv",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ]
+    const allowedExtensions = [".csv", ".xls", ".xlsx"]
+    const maxSize = 10 * 1024 * 1024 // 10MB
+
+    // Check file size
+    if (file.size > maxSize) {
+      return { isValid: false, error: "File size exceeds 10MB limit" }
+    }
+
+    // Check file type
+    const fileExtension = "." + file.name.split(".").pop()?.toLowerCase()
+    if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
+      return { isValid: false, error: "Invalid file type. Only CSV and Excel files are allowed." }
+    }
+
+    return { isValid: true }
+  }
+
+  const generateFileId = (): string => {
+    return Date.now().toString() + Math.random().toString(36).substr(2, 9)
+  }
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return "0 Bytes"
+    const k = 1024
+    const sizes = ["Bytes", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+  }
+
+  const simulateFileUpload = async (file: File): Promise<void> => {
+    const fileId = generateFileId()
+
+    // Create uploaded file record
+    const uploadedFile: UploadedFile = {
+      id: fileId,
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      uploadDate: new Date(),
+      status: "uploading",
+    }
+
+    setUploadedFiles((prev) => [...prev, uploadedFile])
+
+    // Simulate upload progress
+    const progressUpdate: FileUploadProgress = {
+      fileId,
+      progress: 0,
+      status: "uploading",
+    }
+
+    setUploadProgress((prev) => [...prev, progressUpdate])
+
+    try {
+      // Simulate upload progress
+      for (let progress = 0; progress <= 100; progress += 10) {
+        await new Promise((resolve) => setTimeout(resolve, 200))
+        setUploadProgress((prev) => prev.map((p) => (p.fileId === fileId ? { ...p, progress } : p)))
+      }
+
+      // Simulate file processing
+      setUploadProgress((prev) => prev.map((p) => (p.fileId === fileId ? { ...p, status: "processing" } : p)))
+
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      // Simulate successful completion
+      const processedCount = Math.floor(Math.random() * 1000) + 100
+
+      setUploadedFiles((prev) =>
+        prev.map((f) =>
+          f.id === fileId
+            ? {
+                ...f,
+                status: "success",
+                processedCount,
+              }
+            : f,
+        ),
+      )
+
+      setUploadProgress((prev) => prev.map((p) => (p.fileId === fileId ? { ...p, status: "complete" } : p)))
+
+      // Update dashboard data
+      setDashboardData((prev) => ({
+        ...prev,
+        totalPassphrases: prev.totalPassphrases + processedCount,
+        passphrasesToRun: prev.passphrasesToRun + processedCount,
+      }))
+
+      setUploadAlert({
+        type: "success",
+        message: `Successfully uploaded and processed ${file.name}. Added ${processedCount} passphrases.`,
+      })
+    } catch (error) {
+      setUploadedFiles((prev) =>
+        prev.map((f) =>
+          f.id === fileId
+            ? {
+                ...f,
+                status: "error",
+                errorMessage: "Upload failed. Please try again.",
+              }
+            : f,
+        ),
+      )
+
+      setUploadProgress((prev) => prev.map((p) => (p.fileId === fileId ? { ...p, status: "error" } : p)))
+
+      setUploadAlert({
+        type: "error",
+        message: `Failed to upload ${file.name}. Please try again.`,
+      })
+    }
+
+    // Remove progress tracking after completion
+    setTimeout(() => {
+      setUploadProgress((prev) => prev.filter((p) => p.fileId !== fileId))
+    }, 3000)
+  }
+
+  const handleFileSelect = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+
+    const file = files[0]
+    const validation = validateFile(file)
+
+    if (!validation.isValid) {
+      setUploadAlert({
+        type: "error",
+        message: validation.error || "Invalid file",
+      })
+      return
+    }
+
+    await simulateFileUpload(file)
+  }
+
+  const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    handleFileSelect(event.target.files)
+    // Reset input value to allow re-uploading the same file
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }
+
+  const handleDragOver = (event: React.DragEvent) => {
+    event.preventDefault()
+    setDragActive(true)
+  }
+
+  const handleDragLeave = (event: React.DragEvent) => {
+    event.preventDefault()
+    setDragActive(false)
+  }
+
+  const handleDrop = (event: React.DragEvent) => {
+    event.preventDefault()
+    setDragActive(false)
+    handleFileSelect(event.dataTransfer.files)
+  }
+
+  const removeUploadedFile = (fileId: string) => {
+    setUploadedFiles((prev) => prev.filter((f) => f.id !== fileId))
+  }
+
+  const dismissAlert = () => {
+    setUploadAlert(null)
+  }
+
   // Handle client-side mounting
   useEffect(() => {
     setIsMounted(true)
@@ -235,6 +455,16 @@ export default function Component() {
 
     return () => clearInterval(timer)
   }, [isRunning, isMounted])
+
+  // Auto-dismiss alerts after 5 seconds
+  useEffect(() => {
+    if (uploadAlert) {
+      const timer = setTimeout(() => {
+        setUploadAlert(null)
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [uploadAlert])
 
   const filteredPassphrases = passphrases.filter((p) => {
     const matchesSearch =
@@ -506,6 +736,37 @@ export default function Component() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-3 sm:p-6">
       <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+        {/* Upload Alert */}
+        {uploadAlert && (
+          <Alert
+            className={`${
+              uploadAlert.type === "success"
+                ? "border-green-200 bg-green-50"
+                : uploadAlert.type === "error"
+                  ? "border-red-200 bg-red-50"
+                  : "border-blue-200 bg-blue-50"
+            }`}
+          >
+            {uploadAlert.type === "success" && <CheckCircle className="h-4 w-4 text-green-600" />}
+            {uploadAlert.type === "error" && <AlertCircle className="h-4 w-4 text-red-600" />}
+            {uploadAlert.type === "info" && <AlertCircle className="h-4 w-4 text-blue-600" />}
+            <AlertDescription
+              className={`${
+                uploadAlert.type === "success"
+                  ? "text-green-800"
+                  : uploadAlert.type === "error"
+                    ? "text-red-800"
+                    : "text-blue-800"
+              }`}
+            >
+              {uploadAlert.message}
+            </AlertDescription>
+            <Button variant="ghost" size="sm" onClick={dismissAlert} className="absolute right-2 top-2 h-6 w-6 p-0">
+              <X className="h-3 w-3" />
+            </Button>
+          </Alert>
+        )}
+
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -811,14 +1072,159 @@ export default function Component() {
                 />
               </div>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="bg-white border-gray-300 hover:bg-gray-50 text-xs flex-1 sm:flex-none"
-                >
-                  <Upload className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                  Import
-                </Button>
+                {/* File Upload Button */}
+                <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="bg-white border-gray-300 hover:bg-gray-50 text-xs flex-1 sm:flex-none"
+                    >
+                      <Upload className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                      Import
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-white border-gray-200 max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle className="text-gray-900">Import Passphrases</DialogTitle>
+                      <DialogDescription className="text-gray-600">
+                        Upload CSV or Excel files containing passphrases to add to your database
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      {/* File Upload Area */}
+                      <div
+                        className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                          dragActive ? "border-blue-400 bg-blue-50" : "border-gray-300 hover:border-gray-400"
+                        }`}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                      >
+                        <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                        <div className="space-y-2">
+                          <p className="text-lg font-medium text-gray-900">Drop your files here, or click to browse</p>
+                          <p className="text-sm text-gray-600">
+                            Supports CSV and Excel files (.csv, .xls, .xlsx) up to 10MB
+                          </p>
+                        </div>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                          onChange={handleFileInputChange}
+                          className="hidden"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="mt-4 bg-transparent"
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          Choose Files
+                        </Button>
+                      </div>
+
+                      {/* Upload Progress */}
+                      {uploadProgress.length > 0 && (
+                        <div className="space-y-3">
+                          <h4 className="font-medium text-gray-900">Upload Progress</h4>
+                          {uploadProgress.map((progress) => {
+                            const file = uploadedFiles.find((f) => f.id === progress.fileId)
+                            return (
+                              <div key={progress.fileId} className="space-y-2">
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-gray-700 truncate">{file?.name}</span>
+                                  <span className="text-gray-500">
+                                    {progress.status === "uploading" && `${progress.progress}%`}
+                                    {progress.status === "processing" && "Processing..."}
+                                    {progress.status === "complete" && "Complete"}
+                                    {progress.status === "error" && "Error"}
+                                  </span>
+                                </div>
+                                <Progress
+                                  value={progress.status === "complete" ? 100 : progress.progress}
+                                  className="h-2"
+                                />
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+
+                      {/* Uploaded Files List */}
+                      {uploadedFiles.length > 0 && (
+                        <div className="space-y-3">
+                          <h4 className="font-medium text-gray-900">Recent Uploads</h4>
+                          <div className="space-y-2 max-h-40 overflow-y-auto">
+                            {uploadedFiles.slice(-5).map((file) => (
+                              <div
+                                key={file.id}
+                                className="flex items-center justify-between p-2 bg-gray-50 rounded-md"
+                              >
+                                <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                  <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
+                                    <p className="text-xs text-gray-500">
+                                      {formatFileSize(file.size)} • {file.uploadDate.toLocaleDateString()}
+                                      {file.processedCount && ` • ${file.processedCount} passphrases`}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Badge
+                                    className={`text-xs ${
+                                      file.status === "success"
+                                        ? "bg-green-100 text-green-700 border-green-200"
+                                        : file.status === "error"
+                                          ? "bg-red-100 text-red-700 border-red-200"
+                                          : "bg-yellow-100 text-yellow-700 border-yellow-200"
+                                    }`}
+                                  >
+                                    {file.status === "success" && <CheckCircle className="h-3 w-3 mr-1" />}
+                                    {file.status === "error" && <AlertCircle className="h-3 w-3 mr-1" />}
+                                    {file.status}
+                                  </Badge>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => removeUploadedFile(file.id)}
+                                    className="h-6 w-6 p-0"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* File Format Information */}
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <h4 className="font-medium text-blue-900 mb-2">File Format Requirements</h4>
+                        <ul className="text-sm text-blue-800 space-y-1">
+                          <li>• CSV files should have headers: passphrase, description, priority</li>
+                          <li>• Excel files should have data starting from row 1 with headers</li>
+                          <li>• Priority values: High, Medium, Low (optional, defaults to Medium)</li>
+                          <li>• Maximum file size: 10MB</li>
+                          <li>• Supported formats: .csv, .xls, .xlsx</li>
+                        </ul>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowUploadDialog(false)}
+                        className="bg-white border-gray-300"
+                      >
+                        Close
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
                 <Button
                   variant="outline"
                   size="sm"
