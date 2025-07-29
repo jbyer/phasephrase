@@ -33,6 +33,8 @@ import {
   AlertCircle,
   CheckCircle,
   X,
+  Terminal,
+  Loader2,
 } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -57,6 +59,27 @@ interface FileUploadProgress {
   status: "uploading" | "processing" | "complete" | "error"
 }
 
+// SSH operation types
+interface SSHOperation {
+  minerId: string
+  minerType: "runpod" | "mac"
+  operation: "continue" | "refresh" | "stop"
+  status: "pending" | "executing" | "success" | "error"
+  output?: string
+  error?: string
+  timestamp: Date
+}
+
+interface MinerSSHConfig {
+  host: string
+  port: number
+  username: string
+  password?: string
+  privateKey?: string
+  workingDirectory: string
+  processName: string
+}
+
 export default function Component() {
   const [isMounted, setIsMounted] = useState(false)
   const [isRunning, setIsRunning] = useState(true)
@@ -72,6 +95,25 @@ export default function Component() {
     type: "success" | "error" | "info"
     message: string
   } | null>(null)
+
+  // SSH operation states
+  const [sshOperations, setSSHOperations] = useState<SSHOperation[]>([])
+  const [showSSHDialog, setShowSSHDialog] = useState(false)
+  const [selectedMinerForSSH, setSelectedMinerForSSH] = useState<{
+    id: string
+    type: "runpod" | "mac"
+    name: string
+  } | null>(null)
+  const [sshConfig, setSSHConfig] = useState<MinerSSHConfig>({
+    host: "",
+    port: 22,
+    username: "",
+    password: "",
+    privateKey: "",
+    workingDirectory: "/home/user/miner",
+    processName: "miner_process",
+  })
+  const [showSSHConfigDialog, setShowSSHConfigDialog] = useState(false)
 
   // Mock data - replace with real data from your application
   const [dashboardData, setDashboardData] = useState({
@@ -167,6 +209,13 @@ export default function Component() {
         cost: "$0.89/hr",
         uptime: "2h 34m",
         temperature: "72°C",
+        sshConfig: {
+          host: "runpod-gpu-1.example.com",
+          port: 22,
+          username: "root",
+          workingDirectory: "/workspace/miner",
+          processName: "bip38_miner",
+        },
       },
       {
         id: "rp-002",
@@ -178,6 +227,13 @@ export default function Component() {
         cost: "$0.89/hr",
         uptime: "1h 45m",
         temperature: "68°C",
+        sshConfig: {
+          host: "runpod-gpu-2.example.com",
+          port: 22,
+          username: "root",
+          workingDirectory: "/workspace/miner",
+          processName: "bip38_miner",
+        },
       },
       {
         id: "rp-003",
@@ -189,6 +245,13 @@ export default function Component() {
         cost: "$0.00/hr",
         uptime: "0m",
         temperature: "N/A",
+        sshConfig: {
+          host: "runpod-gpu-3.example.com",
+          port: 22,
+          username: "root",
+          workingDirectory: "/workspace/miner",
+          processName: "bip38_miner",
+        },
       },
     ],
     mac: [
@@ -202,6 +265,13 @@ export default function Component() {
         memory: "18GB",
         uptime: "4h 12m",
         temperature: "45°C",
+        sshConfig: {
+          host: "192.168.1.100",
+          port: 22,
+          username: "admin",
+          workingDirectory: "/Users/admin/miner",
+          processName: "bip38_miner",
+        },
       },
       {
         id: "mac-002",
@@ -213,6 +283,13 @@ export default function Component() {
         memory: "64GB",
         uptime: "6h 28m",
         temperature: "52°C",
+        sshConfig: {
+          host: "192.168.1.101",
+          port: 22,
+          username: "admin",
+          workingDirectory: "/Users/admin/miner",
+          processName: "bip38_miner",
+        },
       },
       {
         id: "mac-003",
@@ -224,6 +301,13 @@ export default function Component() {
         memory: "16GB",
         uptime: "0m",
         temperature: "38°C",
+        sshConfig: {
+          host: "192.168.1.102",
+          port: 22,
+          username: "admin",
+          workingDirectory: "/Users/admin/miner",
+          processName: "bip38_miner",
+        },
       },
     ],
   })
@@ -253,6 +337,176 @@ export default function Component() {
 
   const [selectedAlert, setSelectedAlert] = useState<any | null>(null)
   const [showAlertDetailsDialog, setShowAlertDetailsDialog] = useState(false)
+
+  // SSH operation functions
+  const executeSSHOperation = async (
+    minerId: string,
+    minerType: "runpod" | "mac",
+    operation: "continue" | "refresh" | "stop",
+  ) => {
+    const miner = miners[minerType].find((m) => m.id === minerId)
+    if (!miner) return
+
+    const operationId = `${minerId}-${operation}-${Date.now()}`
+    const newOperation: SSHOperation = {
+      minerId,
+      minerType,
+      operation,
+      status: "pending",
+      timestamp: new Date(),
+    }
+
+    setSSHOperations((prev) => [...prev, { ...newOperation }])
+
+    try {
+      // Update operation status to executing
+      setSSHOperations((prev) =>
+        prev.map((op) => (op.minerId === minerId && op.operation === operation ? { ...op, status: "executing" } : op)),
+      )
+
+      const response = await fetch("/api/ssh-operation", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          minerId,
+          minerType,
+          operation,
+          sshConfig: miner.sshConfig,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        // Update operation status to success
+        setSSHOperations((prev) =>
+          prev.map((op) =>
+            op.minerId === minerId && op.operation === operation
+              ? { ...op, status: "success", output: result.output }
+              : op,
+          ),
+        )
+
+        // Update miner status based on operation
+        setMiners((prev) => ({
+          ...prev,
+          [minerType]: prev[minerType].map((m) => {
+            if (m.id === minerId) {
+              let newStatus = m.status
+              let newHashRate = m.hashRate
+              let newUptime = m.uptime
+
+              switch (operation) {
+                case "continue":
+                  newStatus = "running"
+                  newHashRate = minerType === "runpod" ? "850 KH/s" : "245 KH/s"
+                  break
+                case "refresh":
+                  newStatus = "running"
+                  newHashRate = minerType === "runpod" ? "850 KH/s" : "245 KH/s"
+                  newUptime = "0m"
+                  break
+                case "stop":
+                  newStatus = "stopped"
+                  newHashRate = "0 KH/s"
+                  newUptime = "0m"
+                  break
+              }
+
+              return { ...m, status: newStatus, hashRate: newHashRate, uptime: newUptime }
+            }
+            return m
+          }),
+        }))
+
+        setUploadAlert({
+          type: "success",
+          message: `SSH ${operation} operation completed successfully on ${miner.name}`,
+        })
+      } else {
+        throw new Error(result.error || "SSH operation failed")
+      }
+    } catch (error) {
+      // Update operation status to error
+      setSSHOperations((prev) =>
+        prev.map((op) =>
+          op.minerId === minerId && op.operation === operation
+            ? { ...op, status: "error", error: error instanceof Error ? error.message : "Unknown error" }
+            : op,
+        ),
+      )
+
+      setUploadAlert({
+        type: "error",
+        message: `SSH ${operation} operation failed on ${miner.name}: ${error instanceof Error ? error.message : "Unknown error"}`,
+      })
+    }
+  }
+
+  const handleSSHOperation = (
+    minerId: string,
+    minerType: "runpod" | "mac",
+    operation: "continue" | "refresh" | "stop",
+  ) => {
+    executeSSHOperation(minerId, minerType, operation)
+  }
+
+  const openSSHConfig = (minerId: string, minerType: "runpod" | "mac") => {
+    const miner = miners[minerType].find((m) => m.id === minerId)
+    if (miner) {
+      setSelectedMinerForSSH({ id: minerId, type: minerType, name: miner.name })
+      setSSHConfig(miner.sshConfig)
+      setShowSSHConfigDialog(true)
+    }
+  }
+
+  const saveSSHConfig = () => {
+    if (!selectedMinerForSSH) return
+
+    setMiners((prev) => ({
+      ...prev,
+      [selectedMinerForSSH.type]: prev[selectedMinerForSSH.type].map((m) =>
+        m.id === selectedMinerForSSH.id ? { ...m, sshConfig: { ...sshConfig } } : m,
+      ),
+    }))
+
+    setShowSSHConfigDialog(false)
+    setUploadAlert({
+      type: "success",
+      message: `SSH configuration updated for ${selectedMinerForSSH.name}`,
+    })
+  }
+
+  const getOperationIcon = (operation: "continue" | "refresh" | "stop") => {
+    switch (operation) {
+      case "continue":
+        return <Play className="w-3 h-3" />
+      case "refresh":
+        return <RefreshCw className="w-3 h-3" />
+      case "stop":
+        return <PowerOff className="w-3 h-3" />
+    }
+  }
+
+  const getOperationColor = (operation: "continue" | "refresh" | "stop") => {
+    switch (operation) {
+      case "continue":
+        return "border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+      case "refresh":
+        return "border-amber-300 text-amber-700 hover:bg-amber-50"
+      case "stop":
+        return "border-red-300 text-red-700 hover:bg-red-50"
+    }
+  }
+
+  const isOperationInProgress = (minerId: string, operation: "continue" | "refresh" | "stop") => {
+    return sshOperations.some(
+      (op) =>
+        op.minerId === minerId && op.operation === operation && (op.status === "pending" || op.status === "executing"),
+    )
+  }
 
   // File upload utility functions
   const validateFile = (file: File): { isValid: boolean; error?: string } => {
@@ -610,6 +864,13 @@ export default function Component() {
               cost: "$0.00/hr",
               uptime: "0m",
               temperature: "N/A",
+              sshConfig: {
+                host: "",
+                port: 22,
+                username: "root",
+                workingDirectory: "/workspace/miner",
+                processName: "bip38_miner",
+              },
             }
           : {
               id: `mac-${Date.now()}`,
@@ -621,6 +882,13 @@ export default function Component() {
               memory: "16GB",
               uptime: "0m",
               temperature: "N/A",
+              sshConfig: {
+                host: "",
+                port: 22,
+                username: "admin",
+                workingDirectory: "/Users/admin/miner",
+                processName: "bip38_miner",
+              },
             }
 
       setMiners((prev) => ({
@@ -1402,7 +1670,7 @@ export default function Component() {
               <div>
                 <CardTitle className="text-lg sm:text-xl text-gray-900">Miner Management</CardTitle>
                 <CardDescription className="text-sm text-gray-600">
-                  Control and monitor your Runpod and Mac miners
+                  Control and monitor your Runpod and Mac miners via SSH
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
@@ -1602,31 +1870,57 @@ export default function Component() {
                               <div className="text-xs text-gray-600">{miner.cost}</div>
                             </div>
                             <div className="flex items-center justify-center gap-2 flex-wrap">
+                              {/* SSH Operation Buttons */}
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleMinerAction("runpod", miner.id, "start")}
-                                disabled={miner.status === "running"}
-                                className="bg-white border-emerald-300 text-emerald-700 hover:bg-emerald-50 p-1.5"
+                                onClick={() => handleSSHOperation(miner.id, "runpod", "continue")}
+                                disabled={isOperationInProgress(miner.id, "continue")}
+                                className={`bg-white ${getOperationColor("continue")} p-1.5`}
+                                title="Continue Miner"
                               >
-                                <Play className="w-3 h-3" />
+                                {isOperationInProgress(miner.id, "continue") ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  getOperationIcon("continue")
+                                )}
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleMinerAction("runpod", miner.id, "stop")}
-                                disabled={miner.status === "stopped"}
-                                className="bg-white border-red-300 text-red-700 hover:bg-red-50 p-1.5"
+                                onClick={() => handleSSHOperation(miner.id, "runpod", "refresh")}
+                                disabled={isOperationInProgress(miner.id, "refresh")}
+                                className={`bg-white ${getOperationColor("refresh")} p-1.5`}
+                                title="Refresh Miner"
                               >
-                                <PowerOff className="w-3 h-3" />
+                                {isOperationInProgress(miner.id, "refresh") ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  getOperationIcon("refresh")
+                                )}
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleMinerAction("runpod", miner.id, "restart")}
-                                className="bg-white border-amber-300 text-amber-700 hover:bg-amber-50 p-1.5"
+                                onClick={() => handleSSHOperation(miner.id, "runpod", "stop")}
+                                disabled={isOperationInProgress(miner.id, "stop")}
+                                className={`bg-white ${getOperationColor("stop")} p-1.5`}
+                                title="Stop Miner"
                               >
-                                <RefreshCw className="w-3 h-3" />
+                                {isOperationInProgress(miner.id, "stop") ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  getOperationIcon("stop")
+                                )}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openSSHConfig(miner.id, "runpod")}
+                                className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 p-1.5"
+                                title="SSH Config"
+                              >
+                                <Terminal className="w-3 h-3" />
                               </Button>
                               <Button
                                 size="sm"
@@ -1696,31 +1990,57 @@ export default function Component() {
                               <div className="text-xs text-gray-600">Hash Rate</div>
                             </div>
                             <div className="flex items-center justify-center gap-2 flex-wrap">
+                              {/* SSH Operation Buttons */}
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleMinerAction("mac", miner.id, "start")}
-                                disabled={miner.status === "running"}
-                                className="bg-white border-emerald-300 text-emerald-700 hover:bg-emerald-50 p-1.5"
+                                onClick={() => handleSSHOperation(miner.id, "mac", "continue")}
+                                disabled={isOperationInProgress(miner.id, "continue")}
+                                className={`bg-white ${getOperationColor("continue")} p-1.5`}
+                                title="Continue Miner"
                               >
-                                <Play className="w-3 h-3" />
+                                {isOperationInProgress(miner.id, "continue") ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  getOperationIcon("continue")
+                                )}
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleMinerAction("mac", miner.id, "stop")}
-                                disabled={miner.status === "stopped"}
-                                className="bg-white border-red-300 text-red-700 hover:bg-red-50 p-1.5"
+                                onClick={() => handleSSHOperation(miner.id, "mac", "refresh")}
+                                disabled={isOperationInProgress(miner.id, "refresh")}
+                                className={`bg-white ${getOperationColor("refresh")} p-1.5`}
+                                title="Refresh Miner"
                               >
-                                <PowerOff className="w-3 h-3" />
+                                {isOperationInProgress(miner.id, "refresh") ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  getOperationIcon("refresh")
+                                )}
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleMinerAction("mac", miner.id, "restart")}
-                                className="bg-white border-amber-300 text-amber-700 hover:bg-amber-50 p-1.5"
+                                onClick={() => handleSSHOperation(miner.id, "mac", "stop")}
+                                disabled={isOperationInProgress(miner.id, "stop")}
+                                className={`bg-white ${getOperationColor("stop")} p-1.5`}
+                                title="Stop Miner"
                               >
-                                <RefreshCw className="w-3 h-3" />
+                                {isOperationInProgress(miner.id, "stop") ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  getOperationIcon("stop")
+                                )}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openSSHConfig(miner.id, "mac")}
+                                className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 p-1.5"
+                                title="SSH Config"
+                              >
+                                <Terminal className="w-3 h-3" />
                               </Button>
                               <Button
                                 size="sm"
@@ -1764,6 +2084,151 @@ export default function Component() {
             </Tabs>
           </CardContent>
         </Card>
+
+        {/* SSH Configuration Dialog */}
+        <Dialog open={showSSHConfigDialog} onOpenChange={setShowSSHConfigDialog}>
+          <DialogContent className="bg-white border-gray-200 max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-gray-900 flex items-center gap-2">
+                <Terminal className="w-5 h-5 text-blue-600" />
+                SSH Configuration - {selectedMinerForSSH?.name}
+              </DialogTitle>
+              <DialogDescription className="text-gray-600">
+                Configure SSH connection settings for remote miner operations
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="ssh-host" className="text-gray-700">
+                    Host/IP Address
+                  </Label>
+                  <Input
+                    id="ssh-host"
+                    value={sshConfig.host}
+                    onChange={(e) => setSSHConfig((prev) => ({ ...prev, host: e.target.value }))}
+                    placeholder="192.168.1.100 or hostname"
+                    className="bg-white border-gray-300 text-gray-900"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="ssh-port" className="text-gray-700">
+                    Port
+                  </Label>
+                  <Input
+                    id="ssh-port"
+                    type="number"
+                    value={sshConfig.port}
+                    onChange={(e) => setSSHConfig((prev) => ({ ...prev, port: Number.parseInt(e.target.value) || 22 }))}
+                    placeholder="22"
+                    className="bg-white border-gray-300 text-gray-900"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ssh-username" className="text-gray-700">
+                  Username
+                </Label>
+                <Input
+                  id="ssh-username"
+                  value={sshConfig.username}
+                  onChange={(e) => setSSHConfig((prev) => ({ ...prev, username: e.target.value }))}
+                  placeholder="root or admin"
+                  className="bg-white border-gray-300 text-gray-900"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ssh-password" className="text-gray-700">
+                  Password (Optional - use private key for better security)
+                </Label>
+                <Input
+                  id="ssh-password"
+                  type="password"
+                  value={sshConfig.password}
+                  onChange={(e) => setSSHConfig((prev) => ({ ...prev, password: e.target.value }))}
+                  placeholder="SSH password"
+                  className="bg-white border-gray-300 text-gray-900"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ssh-private-key" className="text-gray-700">
+                  Private Key (Recommended)
+                </Label>
+                <Textarea
+                  id="ssh-private-key"
+                  value={sshConfig.privateKey}
+                  onChange={(e) => setSSHConfig((prev) => ({ ...prev, privateKey: e.target.value }))}
+                  placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
+                  className="bg-white border-gray-300 text-gray-900 font-mono text-sm"
+                  rows={4}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ssh-working-dir" className="text-gray-700">
+                  Working Directory
+                </Label>
+                <Input
+                  id="ssh-working-dir"
+                  value={sshConfig.workingDirectory}
+                  onChange={(e) => setSSHConfig((prev) => ({ ...prev, workingDirectory: e.target.value }))}
+                  placeholder="/home/user/miner"
+                  className="bg-white border-gray-300 text-gray-900"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ssh-process-name" className="text-gray-700">
+                  Process Name
+                </Label>
+                <Input
+                  id="ssh-process-name"
+                  value={sshConfig.processName}
+                  onChange={(e) => setSSHConfig((prev) => ({ ...prev, processName: e.target.value }))}
+                  placeholder="bip38_miner"
+                  className="bg-white border-gray-300 text-gray-900"
+                />
+              </div>
+
+              {/* SSH Commands Preview */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 mb-2">SSH Commands Preview</h4>
+                <div className="space-y-2 text-sm font-mono">
+                  <div>
+                    <span className="text-green-600">Continue:</span>{" "}
+                    <span className="text-gray-700">
+                      cd {sshConfig.workingDirectory} && ./{sshConfig.processName} --resume
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-amber-600">Refresh:</span>{" "}
+                    <span className="text-gray-700">
+                      cd {sshConfig.workingDirectory} && pkill {sshConfig.processName} && ./{sshConfig.processName}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-red-600">Stop:</span>{" "}
+                    <span className="text-gray-700">pkill {sshConfig.processName}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowSSHConfigDialog(false)}
+                className="bg-white border-gray-300"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={saveSSHConfig}
+                disabled={!sshConfig.host || !sshConfig.username}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                Save Configuration
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Delete Confirmation Dialog */}
         <Dialog
