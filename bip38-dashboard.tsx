@@ -208,7 +208,7 @@ export default function Component() {
         region: "US-West",
         cost: "$0.89/hr",
         uptime: "2h 34m",
-        temperature: "72°C",
+        /*temperature: "72°C",*/
         sshConfig: {
           host: "runpod-gpu-1.example.com",
           port: 22,
@@ -226,7 +226,7 @@ export default function Component() {
         region: "EU-Central",
         cost: "$0.89/hr",
         uptime: "1h 45m",
-        temperature: "68°C",
+        /*temperature: "68°C",*/
         sshConfig: {
           host: "runpod-gpu-2.example.com",
           port: 22,
@@ -244,7 +244,7 @@ export default function Component() {
         region: "US-East",
         cost: "$0.00/hr",
         uptime: "0m",
-        temperature: "N/A",
+        /*temperature: "N/A",*/
         sshConfig: {
           host: "runpod-gpu-3.example.com",
           port: 22,
@@ -264,7 +264,7 @@ export default function Component() {
         cores: 12,
         memory: "18GB",
         uptime: "4h 12m",
-        temperature: "45°C",
+        /*temperature: "45°C",*/
         sshConfig: {
           host: "192.168.1.100",
           port: 22,
@@ -282,7 +282,7 @@ export default function Component() {
         cores: 24,
         memory: "64GB",
         uptime: "6h 28m",
-        temperature: "52°C",
+        /*temperature: "52°C",*/
         sshConfig: {
           host: "192.168.1.101",
           port: 22,
@@ -300,7 +300,7 @@ export default function Component() {
         cores: 8,
         memory: "16GB",
         uptime: "0m",
-        temperature: "38°C",
+        /*temperature: "38°C",*/
         sshConfig: {
           host: "192.168.1.102",
           port: 22,
