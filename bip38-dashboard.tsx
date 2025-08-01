@@ -1939,14 +1939,10 @@ export default function Component() {
                             </div>
                           </div>
                         </div>
-                        <div className="grid grid-cols-3 gap-2 sm:gap-4 mt-3 pt-3 border-t border-gray-200">
+                        <div className="grid grid-cols-2 gap-2 sm:gap-4 mt-3 pt-3 border-t border-gray-200">
                           <div className="text-center">
                             <div className="text-xs sm:text-sm font-medium text-gray-900">{miner.uptime}</div>
                             <div className="text-xs text-gray-600">Uptime</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-xs sm:text-sm font-medium text-gray-900">{miner.temperature}</div>
-                            <div className="text-xs text-gray-600">Temperature</div>
                           </div>
                           <div className="text-center">
                             <div
@@ -2059,14 +2055,10 @@ export default function Component() {
                             </div>
                           </div>
                         </div>
-                        <div className="grid grid-cols-3 gap-2 sm:gap-4 mt-3 pt-3 border-t border-gray-200">
+                        <div className="grid grid-cols-2 gap-2 sm:gap-4 mt-3 pt-3 border-t border-gray-200">
                           <div className="text-center">
                             <div className="text-xs sm:text-sm font-medium text-gray-900">{miner.uptime}</div>
                             <div className="text-xs text-gray-600">Uptime</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-xs sm:text-sm font-medium text-gray-900">{miner.temperature}</div>
-                            <div className="text-xs text-gray-600">Temperature</div>
                           </div>
                           <div className="text-center">
                             <div
