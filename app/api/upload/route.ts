@@ -7,9 +7,11 @@ const UPLOAD_DIR = path.join(process.cwd(), "uploaded")
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const ALLOWED_TYPES = [
   "text/csv",
+  "text/plain",
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ]
+const allowedExtensions = [".csv", ".txt", ".xls", ".xlsx"]
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,10 +29,12 @@ export async function POST(request: NextRequest) {
 
     // Validate file type
     const fileExtension = "." + file.name.split(".").pop()?.toLowerCase()
-    const allowedExtensions = [".csv", ".xls", ".xlsx"]
 
     if (!ALLOWED_TYPES.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
-      return NextResponse.json({ error: "Invalid file type. Only CSV and Excel files are allowed." }, { status: 400 })
+      return NextResponse.json(
+        { error: "Invalid file type. Only CSV, TXT, and Excel files are allowed." },
+        { status: 400 },
+      )
     }
 
     // Create upload directory if it doesn't exist
