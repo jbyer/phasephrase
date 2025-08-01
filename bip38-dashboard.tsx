@@ -512,10 +512,11 @@ export default function Component() {
   const validateFile = (file: File): { isValid: boolean; error?: string } => {
     const allowedTypes = [
       "text/csv",
+      "text/plain",
       "application/vnd.ms-excel",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ]
-    const allowedExtensions = [".csv", ".xls", ".xlsx"]
+    const allowedExtensions = [".csv", ".txt", ".xls", ".xlsx"]
     const maxSize = 10 * 1024 * 1024 // 10MB
 
     // Check file size
@@ -526,7 +527,7 @@ export default function Component() {
     // Check file type
     const fileExtension = "." + file.name.split(".").pop()?.toLowerCase()
     if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
-      return { isValid: false, error: "Invalid file type. Only CSV and Excel files are allowed." }
+      return { isValid: false, error: "Invalid file type. Only CSV, TXT, and Excel files are allowed." }
     }
 
     return { isValid: true }
@@ -1356,7 +1357,7 @@ export default function Component() {
                     <DialogHeader>
                       <DialogTitle className="text-gray-900">Import Passphrases</DialogTitle>
                       <DialogDescription className="text-gray-600">
-                        Upload CSV or Excel files containing passphrases to add to your database
+                        Upload CSV, TXT, or Excel files containing passphrases to add to your database
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
@@ -1373,13 +1374,13 @@ export default function Component() {
                         <div className="space-y-2">
                           <p className="text-lg font-medium text-gray-900">Drop your files here, or click to browse</p>
                           <p className="text-sm text-gray-600">
-                            Supports CSV and Excel files (.csv, .xls, .xlsx) up to 10MB
+                            Supports CSV, TXT, and Excel files (.csv, .txt, .xls, .xlsx) up to 10MB
                           </p>
                         </div>
                         <input
                           ref={fileInputRef}
                           type="file"
-                          accept=".csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                          accept=".csv,.txt,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain"
                           onChange={handleFileInputChange}
                           className="hidden"
                         />
@@ -1474,10 +1475,14 @@ export default function Component() {
                         <h4 className="font-medium text-blue-900 mb-2">File Format Requirements</h4>
                         <ul className="text-sm text-blue-800 space-y-1">
                           <li>• CSV files should have headers: passphrase, description, priority</li>
+                          <li>
+                            • TXT files should have one passphrase per line (description and priority will default to
+                            "Imported" and "Medium")
+                          </li>
                           <li>• Excel files should have data starting from row 1 with headers</li>
                           <li>• Priority values: High, Medium, Low (optional, defaults to Medium)</li>
                           <li>• Maximum file size: 10MB</li>
-                          <li>• Supported formats: .csv, .xls, .xlsx</li>
+                          <li>• Supported formats: .csv, .txt, .xls, .xlsx</li>
                         </ul>
                       </div>
                     </div>
