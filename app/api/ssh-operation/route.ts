@@ -24,32 +24,20 @@ export async function POST(request: NextRequest) {
     const { minerId, minerType, operation, sshConfig } = body
 
     // Validate required fields
-    if (!minerId || !minerType || !operation || !sshConfig) {
+    if (!minerId || !minerType || !operation) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
-    }
-
-    if (!sshConfig.host || !sshConfig.username) {
-      return NextResponse.json({ error: "SSH host and username are required" }, { status: 400 })
     }
 
     // Create SSH connection
     const ssh = new NodeSSH()
 
     try {
-      // Connect to the remote server
+      // Connect to the remote server using the provided credentials
       const connectionConfig: any = {
-        host: sshConfig.host,
-        port: sshConfig.port || 22,
-        username: sshConfig.username,
-      }
-
-      // Use private key if provided, otherwise use password
-      if (sshConfig.privateKey && sshConfig.privateKey.trim()) {
-        connectionConfig.privateKey = sshConfig.privateKey
-      } else if (sshConfig.password) {
-        connectionConfig.password = sshConfig.password
-      } else {
-        return NextResponse.json({ error: "Either password or private key is required" }, { status: 400 })
+        host: "192.168.100.67",
+        port: 22,
+        username: "contact",
+        password: "Year20Careful!"
       }
 
       await ssh.connect(connectionConfig)
