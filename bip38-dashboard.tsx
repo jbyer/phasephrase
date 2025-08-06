@@ -1,11 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import type React from "react"
+
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Activity, Database, Clock, Zap, Play, Pause, RotateCcw, Shield, Key } from "lucide-react"
+import { Activity, Database, Clock, Zap, Play, Pause, RotateCcw, Shield, Key } from 'lucide-react'
 import { Input } from "@/components/ui/input"
 import {
   Dialog,
@@ -19,14 +21,89 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Plus, Trash2, Eye, EyeOff, Download, Upload } from "lucide-react"
+import { Search, Plus, Trash2, Eye, EyeOff, Download, Upload, FileText, AlertCircle, CheckCircle, X, Terminal, Loader2 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Server, Monitor, Wifi, WifiOff, RefreshCw, PowerOff, BellRing } from "lucide-react"
+import { Server, Monitor, Wifi, WifiOff, RefreshCw, PowerOff, BellRing } from 'lucide-react'
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Switch } from "@/components/ui/switch"
+
+// File upload types and interfaces
+interface UploadedFile {
+  id: string
+  name: string
+  size: number
+  type: string
+  uploadDate: Date
+  status: "uploading" | "success" | "error"
+  errorMessage?: string
+  processedCount?: number
+}
+
+interface FileUploadProgress {
+  fileId: string
+  progress: number
+  status: "uploading" | "processing" | "complete" | "error"
+}
+
+// SSH operation types
+interface SSHOperation {
+  minerId: string
+  minerType: "runpod" | "mac"
+  operation: "continue" | "refresh" | "stop"
+  status: "pending" | "executing" | "success" | "error"
+  output?: string
+  error?: string
+  timestamp: Date
+}
+
+interface MinerSSHConfig {
+  host: string
+  port: number
+  username: string
+  password?: string
+  privateKey?: string
+  workingDirectory: string
+  processName: string
+}
 
 export default function Component() {
+  const [isMounted, setIsMounted] = useState(false)
   const [isRunning, setIsRunning] = useState(true)
-  const [currentTime, setCurrentTime] = useState(new Date())
+  const [currentTime, setCurrentTime] = useState<Date | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // File upload states
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [uploadProgress, setUploadProgress] = useState<FileUploadProgress[]>([])
+  const [showUploadDialog, setShowUploadDialog] = useState(false)
+  const [dragActive, setDragActive] = useState(false)
+  const [uploadAlert, setUploadAlert] = useState<{
+    type: "success" | "error" | "info"
+    message: string
+  } | null>(null)
+
+  // SSH operation states
+  const [sshOperations, setSSHOperations] = useState<SSHOperation[]>([])
+  const [showSSHDialog, setShowSSHDialog] = useState(false)
+  const [selectedMinerForSSH, setSelectedMinerForSSH] = useState<{
+    id: string
+    type: "runpod" | "mac"
+    name: string
+  } | null>(null)
+  const [sshConfig, setSSHConfig] = useState<MinerSSHConfig>({
+    host: "",
+    port: 22,
+    username: "",
+    password: "",
+    privateKey: "",
+    workingDirectory: "/home/user/miner",
+    processName: "miner_process",
+  })
+  const [showSSHConfigDialog, setShowSSHConfigDialog] = useState(false)
+
+  // View mode state
+  const [viewMode, setViewMode] = useState<"live" | "test">("live")
 
   // Mock data - replace with real data from your application
   const [dashboardData, setDashboardData] = useState({
@@ -122,28 +199,13 @@ export default function Component() {
         cost: "$0.89/hr",
         uptime: "2h 34m",
         temperature: "72°C",
-      },
-      {
-        id: "rp-002",
-        name: "Runpod-GPU-2",
-        status: "running",
-        hashRate: "820 KH/s",
-        gpu: "RTX 4090",
-        region: "EU-Central",
-        cost: "$0.89/hr",
-        uptime: "1h 45m",
-        temperature: "68°C",
-      },
-      {
-        id: "rp-003",
-        name: "Runpod-GPU-3",
-        status: "stopped",
-        hashRate: "0 KH/s",
-        gpu: "RTX 4080",
-        region: "US-East",
-        cost: "$0.00/hr",
-        uptime: "0m",
-        temperature: "N/A",
+        sshConfig: {
+          host: "runpod-gpu-1.example.com",
+          port: 22,
+          username: "root",
+          workingDirectory: "/workspace/miner",
+          processName: "bip38_miner",
+        },
       },
     ],
     mac: [
@@ -157,6 +219,13 @@ export default function Component() {
         memory: "18GB",
         uptime: "4h 12m",
         temperature: "45°C",
+        sshConfig: {
+          host: "192.168.1.100",
+          port: 22,
+          username: "admin",
+          workingDirectory: "/Users/admin/miner",
+          processName: "bip38_miner",
+        },
       },
       {
         id: "mac-002",
@@ -168,6 +237,13 @@ export default function Component() {
         memory: "64GB",
         uptime: "6h 28m",
         temperature: "52°C",
+        sshConfig: {
+          host: "192.168.1.101",
+          port: 22,
+          username: "admin",
+          workingDirectory: "/Users/admin/miner",
+          processName: "bip38_miner",
+        },
       },
       {
         id: "mac-003",
@@ -179,6 +255,121 @@ export default function Component() {
         memory: "16GB",
         uptime: "0m",
         temperature: "38°C",
+        sshConfig: {
+          host: "192.168.1.102",
+          port: 22,
+          username: "admin",
+          workingDirectory: "/Users/admin/miner",
+          processName: "bip38_miner",
+        },
+      },
+      {
+        id: "mac-004",
+        name: "MacBook Air M2",
+        status: "running",
+        hashRate: "180 KH/s",
+        cpu: "M2",
+        cores: 8,
+        memory: "16GB",
+        uptime: "3h 15m",
+        temperature: "42°C",
+        sshConfig: {
+          host: "192.168.1.103",
+          port: 22,
+          username: "admin",
+          workingDirectory: "/Users/admin/miner",
+          processName: "bip38_miner",
+        },
+      },
+      {
+        id: "mac-005",
+        name: "Mac Mini M1",
+        status: "running",
+        hashRate: "165 KH/s",
+        cpu: "M1",
+        cores: 8,
+        memory: "16GB",
+        uptime: "5h 42m",
+        temperature: "48°C",
+        sshConfig: {
+          host: "192.168.1.104",
+          port: 22,
+          username: "admin",
+          workingDirectory: "/Users/admin/miner",
+          processName: "bip38_miner",
+        },
+      },
+      {
+        id: "mac-006",
+        name: "iMac Pro M3",
+        status: "running",
+        hashRate: "420 KH/s",
+        cpu: "M3 Max",
+        cores: 16,
+        memory: "32GB",
+        uptime: "2h 18m",
+        temperature: "55°C",
+        sshConfig: {
+          host: "192.168.1.105",
+          port: 22,
+          username: "admin",
+          workingDirectory: "/Users/admin/miner",
+          processName: "bip38_miner",
+        },
+      },
+      {
+        id: "mac-007",
+        name: "MacBook Pro M2",
+        status: "running",
+        hashRate: "290 KH/s",
+        cpu: "M2 Pro",
+        cores: 12,
+        memory: "32GB",
+        uptime: "1h 55m",
+        temperature: "47°C",
+        sshConfig: {
+          host: "192.168.1.106",
+          port: 22,
+          username: "admin",
+          workingDirectory: "/Users/admin/miner",
+          processName: "bip38_miner",
+        },
+      },
+      {
+        id: "mac-008",
+        name: "Mac Studio M1",
+        status: "running",
+        hashRate: "350 KH/s",
+        cpu: "M1 Ultra",
+        cores: 20,
+        memory: "64GB",
+        uptime: "7h 33m",
+        temperature: "51°C",
+        sshConfig: {
+          host: "192.168.1.107",
+          port: 22,
+          username: "admin",
+          workingDirectory: "/Users/admin/miner",
+          processName: "bip38_miner",
+        },
+      },
+      {
+        id: "mac-009",
+        name: "MacBook Pro M1",
+        status: "idle",
+        hashRate: "0 KH/s",
+        cpu: "M1 Pro",
+        cores: 10,
+        memory: "16GB",
+        uptime: "0m",
+        temperature: "35°C",
+        sshConfig: {
+          host: "192.168.1.108",
+          port: 22,
+          username: "admin",
+          workingDirectory: "/Users/admin/miner",
+          processName: "bip38_miner",
+        },
       },
     ],
   })
@@ -209,7 +400,388 @@ export default function Component() {
   const [selectedAlert, setSelectedAlert] = useState<any | null>(null)
   const [showAlertDetailsDialog, setShowAlertDetailsDialog] = useState(false)
 
+  // SSH operation functions
+  const executeSSHOperation = async (
+    minerId: string,
+    minerType: "runpod" | "mac",
+    operation: "continue" | "refresh" | "stop",
+  ) => {
+    const miner = miners[minerType].find((m) => m.id === minerId)
+    if (!miner) return
+
+    const operationId = `${minerId}-${operation}-${Date.now()}`
+    const newOperation: SSHOperation = {
+      minerId,
+      minerType,
+      operation,
+      status: "pending",
+      timestamp: new Date(),
+    }
+
+    setSSHOperations((prev) => [...prev, { ...newOperation }])
+
+    try {
+      // Update operation status to executing
+      setSSHOperations((prev) =>
+        prev.map((op) => (op.minerId === minerId && op.operation === operation ? { ...op, status: "executing" } : op)),
+      )
+
+      const response = await fetch("/api/ssh-operation", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          minerId,
+          minerType,
+          operation,
+          sshConfig: miner.sshConfig,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        // Update operation status to success
+        setSSHOperations((prev) =>
+          prev.map((op) =>
+            op.minerId === minerId && op.operation === operation
+              ? { ...op, status: "success", output: result.output }
+              : op,
+          ),
+        )
+
+        // Update miner status based on operation
+        setMiners((prev) => ({
+          ...prev,
+          [minerType]: prev[minerType].map((m) => {
+            if (m.id === minerId) {
+              let newStatus = m.status
+              let newHashRate = m.hashRate
+              let newUptime = m.uptime
+
+              switch (operation) {
+                case "continue":
+                  newStatus = "running"
+                  newHashRate = minerType === "runpod" ? "850 KH/s" : "245 KH/s"
+                  break
+                case "refresh":
+                  newStatus = "running"
+                  newHashRate = minerType === "runpod" ? "850 KH/s" : "245 KH/s"
+                  newUptime = "0m"
+                  break
+                case "stop":
+                  newStatus = "stopped"
+                  newHashRate = "0 KH/s"
+                  newUptime = "0m"
+                  break
+              }
+
+              return { ...m, status: newStatus, hashRate: newHashRate, uptime: newUptime }
+            }
+            return m
+          }),
+        }))
+
+        setUploadAlert({
+          type: "success",
+          message: `SSH ${operation} operation completed successfully on ${miner.name}`,
+        })
+      } else {
+        throw new Error(result.error || "SSH operation failed")
+      }
+    } catch (error) {
+      // Update operation status to error
+      setSSHOperations((prev) =>
+        prev.map((op) =>
+          op.minerId === minerId && op.operation === operation
+            ? { ...op, status: "error", error: error instanceof Error ? error.message : "Unknown error" }
+            : op,
+        ),
+      )
+
+      setUploadAlert({
+        type: "error",
+        message: `SSH ${operation} operation failed on ${miner.name}: ${error instanceof Error ? error.message : "Unknown error"}`,
+      })
+    }
+  }
+
+  const handleSSHOperation = (
+    minerId: string,
+    minerType: "runpod" | "mac",
+    operation: "continue" | "refresh" | "stop",
+  ) => {
+    executeSSHOperation(minerId, minerType, operation)
+  }
+
+  const openSSHConfig = (minerId: string, minerType: "runpod" | "mac") => {
+    const miner = miners[minerType].find((m) => m.id === minerId)
+    if (miner) {
+      setSelectedMinerForSSH({ id: minerId, type: minerType, name: miner.name })
+      setSSHConfig(miner.sshConfig)
+      setShowSSHConfigDialog(true)
+    }
+  }
+
+  const saveSSHConfig = () => {
+    if (!selectedMinerForSSH) return
+
+    setMiners((prev) => ({
+      ...prev,
+      [selectedMinerForSSH.type]: prev[selectedMinerForSSH.type].map((m) =>
+        m.id === selectedMinerForSSH.id ? { ...m, sshConfig: { ...sshConfig } } : m,
+      ),
+    }))
+
+    setShowSSHConfigDialog(false)
+    setUploadAlert({
+      type: "success",
+      message: `SSH configuration updated for ${selectedMinerForSSH.name}`,
+    })
+  }
+
+  const getOperationIcon = (operation: "continue" | "refresh" | "stop") => {
+    switch (operation) {
+      case "continue":
+        return <Play className="w-3 h-3" />
+      case "refresh":
+        return <RefreshCw className="w-3 h-3" />
+      case "stop":
+        return <PowerOff className="w-3 h-3" />
+    }
+  }
+
+  const getOperationColor = (operation: "continue" | "refresh" | "stop") => {
+    switch (operation) {
+      case "continue":
+        return "border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+      case "refresh":
+        return "border-amber-300 text-amber-700 hover:bg-amber-50"
+      case "stop":
+        return "border-red-300 text-red-700 hover:bg-red-50"
+    }
+  }
+
+  const isOperationInProgress = (minerId: string, operation: "continue" | "refresh" | "stop") => {
+    return sshOperations.some(
+      (op) =>
+        op.minerId === minerId && op.operation === operation && (op.status === "pending" || op.status === "executing"),
+    )
+  }
+
+  // File upload utility functions
+  const validateFile = (file: File): { isValid: boolean; error?: string } => {
+    const allowedTypes = [
+      "text/csv",
+      "text/plain",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ]
+    const allowedExtensions = [".csv", ".txt", ".xls", ".xlsx"]
+    const maxSize = 10 * 1024 * 1024 // 10MB
+
+    // Check file size
+    if (file.size > maxSize) {
+      return { isValid: false, error: "File size exceeds 10MB limit" }
+    }
+
+    // Check file type
+    const fileExtension = "." + file.name.split(".").pop()?.toLowerCase()
+    if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
+      return { isValid: false, error: "Invalid file type. Only CSV, TXT, and Excel files are allowed." }
+    }
+
+    return { isValid: true }
+  }
+
+  const generateFileId = (): string => {
+    return Date.now().toString() + Math.random().toString(36).substr(2, 9)
+  }
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return "0 Bytes"
+    const k = 1024
+    const sizes = ["Bytes", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+  }
+
+  const simulateFileUpload = async (file: File): Promise<void> => {
+    const fileId = generateFileId()
+
+    // Create uploaded file record
+    const uploadedFile: UploadedFile = {
+      id: fileId,
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      uploadDate: new Date(),
+      status: "uploading",
+    }
+
+    setUploadedFiles((prev) => [...prev, uploadedFile])
+
+    // Simulate upload progress
+    const progressUpdate: FileUploadProgress = {
+      fileId,
+      progress: 0,
+      status: "uploading",
+    }
+
+    setUploadProgress((prev) => [...prev, progressUpdate])
+
+    try {
+      // Simulate upload progress
+      for (let progress = 0; progress <= 100; progress += 10) {
+        await new Promise((resolve) => setTimeout(resolve, 200))
+        setUploadProgress((prev) => prev.map((p) => (p.fileId === fileId ? { ...p, progress } : p)))
+      }
+
+      // Simulate file processing
+      setUploadProgress((prev) => prev.map((p) => (p.fileId === fileId ? { ...p, status: "processing" } : p)))
+
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      // Simulate successful completion
+      const processedCount = Math.floor(Math.random() * 1000) + 100
+
+      setUploadedFiles((prev) =>
+        prev.map((f) =>
+          f.id === fileId
+            ? {
+                ...f,
+                status: "success",
+                processedCount,
+              }
+            : f,
+        ),
+      )
+
+      setUploadProgress((prev) => prev.map((p) => (p.fileId === fileId ? { ...p, status: "complete" } : p)))
+
+      // Update dashboard data
+      setDashboardData((prev) => ({
+        ...prev,
+        totalPassphrases: prev.totalPassphrases + processedCount,
+        passphrasesToRun: prev.passphrasesToRun + processedCount,
+      }))
+
+      setUploadAlert({
+        type: "success",
+        message: `Successfully uploaded and processed ${file.name}. Added ${processedCount} passphrases.`,
+      })
+    } catch (error) {
+      setUploadedFiles((prev) =>
+        prev.map((f) =>
+          f.id === fileId
+            ? {
+                ...f,
+                status: "error",
+                errorMessage: "Upload failed. Please try again.",
+              }
+            : f,
+        ),
+      )
+
+      setUploadProgress((prev) => prev.map((p) => (p.fileId === fileId ? { ...p, status: "error" } : p)))
+
+      setUploadAlert({
+        type: "error",
+        message: `Failed to upload ${file.name}. Please try again.`,
+      })
+    }
+
+    // Remove progress tracking after completion
+    setTimeout(() => {
+      setUploadProgress((prev) => prev.filter((p) => p.fileId !== fileId))
+    }, 3000)
+  }
+
+  const handleFileSelect = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+
+    const file = files[0]
+    const validation = validateFile(file)
+
+    if (!validation.isValid) {
+      setUploadAlert({
+        type: "error",
+        message: validation.error || "Invalid file",
+      })
+      return
+    }
+
+    await simulateFileUpload(file)
+  }
+
+  const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    handleFileSelect(event.target.files)
+    // Reset input value to allow re-uploading the same file
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }
+
+  const handleDragOver = (event: React.DragEvent) => {
+    event.preventDefault()
+    setDragActive(true)
+  }
+
+  const handleDragLeave = (event: React.DragEvent) => {
+    event.preventDefault()
+    setDragActive(false)
+  }
+
+  const handleDrop = (event: React.DragEvent) => {
+    event.preventDefault()
+    setDragActive(false)
+    handleFileSelect(event.dataTransfer.files)
+  }
+
+  const removeUploadedFile = (fileId: string) => {
+    setUploadedFiles((prev) => prev.filter((f) => f.id !== fileId))
+  }
+
+  const dismissAlert = () => {
+    setUploadAlert(null)
+  }
+
+  const getThemeClasses = (viewMode: "live" | "test") => {
+    if (viewMode === "test") {
+      return {
+        background: "bg-gradient-to-br from-orange-50 via-red-50 to-pink-50",
+        card: "bg-white/80 backdrop-blur-sm border-orange-200 shadow-lg",
+        cardHover: "hover:shadow-xl",
+        button: "bg-orange-600 hover:bg-orange-700",
+        buttonOutline: "bg-white border-orange-300 hover:bg-orange-50",
+        badge: "bg-orange-100 text-orange-800 border-orange-200",
+        accent: "text-orange-600",
+        icon: "text-orange-600"
+      }
+    }
+    return {
+      background: "bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50",
+      card: "bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg",
+      cardHover: "hover:shadow-xl",
+      button: "bg-blue-600 hover:bg-blue-700",
+      buttonOutline: "bg-white border-gray-300 hover:bg-gray-50",
+      badge: "bg-blue-100 text-blue-800 border-blue-200",
+      accent: "text-blue-600",
+      icon: "text-blue-600"
+    }
+  }
+
+  // Handle client-side mounting
   useEffect(() => {
+    setIsMounted(true)
+    setCurrentTime(new Date())
+  }, [])
+
+  // Handle real-time updates only on client side
+  useEffect(() => {
+    if (!isMounted) return
+
     const timer = setInterval(() => {
       setCurrentTime(new Date())
 
@@ -224,7 +796,17 @@ export default function Component() {
     }, 2000)
 
     return () => clearInterval(timer)
-  }, [isRunning])
+  }, [isRunning, isMounted])
+
+  // Auto-dismiss alerts after 5 seconds
+  useEffect(() => {
+    if (uploadAlert) {
+      const timer = setTimeout(() => {
+        setUploadAlert(null)
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [uploadAlert])
 
   const filteredPassphrases = passphrases.filter((p) => {
     const matchesSearch =
@@ -370,6 +952,13 @@ export default function Component() {
               cost: "$0.00/hr",
               uptime: "0m",
               temperature: "N/A",
+              sshConfig: {
+                host: "",
+                port: 22,
+                username: "root",
+                workingDirectory: "/workspace/miner",
+                processName: "bip38_miner",
+              },
             }
           : {
               id: `mac-${Date.now()}`,
@@ -381,6 +970,13 @@ export default function Component() {
               memory: "16GB",
               uptime: "0m",
               temperature: "N/A",
+              sshConfig: {
+                host: "",
+                port: 22,
+                username: "admin",
+                workingDirectory: "/Users/admin/miner",
+                processName: "bip38_miner",
+              },
             }
 
       setMiners((prev) => ({
@@ -447,25 +1043,32 @@ export default function Component() {
       case "stopped":
         return "bg-red-100 text-red-700 border-red-200"
       case "idle":
-        return "bg-amber-100 text-amber-700 border-amber-200"
+        return "bg-amber-100 text-amber-200"
       default:
         return "bg-gray-100 text-gray-700 border-gray-200"
     }
   }
 
   const formatTimeAgo = (date: Date) => {
-    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000)
-    let interval = seconds / 31536000
-    if (interval > 1) return Math.floor(interval) + " years ago"
-    interval = seconds / 2592000
-    if (interval > 1) return Math.floor(interval) + " months ago"
-    interval = seconds / 86400
-    if (interval > 1) return Math.floor(interval) + " days ago"
-    interval = seconds / 3600
-    if (interval > 1) return Math.floor(interval) + " hours ago"
-    interval = seconds / 60
-    if (interval > 1) return Math.floor(interval) + " minutes ago"
-    return Math.floor(seconds) + " seconds ago"
+    if (!isMounted || !date) return "Loading..."
+
+    try {
+      const now = currentTime || new Date()
+      const seconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+      let interval = seconds / 31536000
+      if (interval > 1) return Math.floor(interval) + " years ago"
+      interval = seconds / 2592000
+      if (interval > 1) return Math.floor(interval) + " months ago"
+      interval = seconds / 86400
+      if (interval > 1) return Math.floor(interval) + " days ago"
+      interval = seconds / 3600
+      if (interval > 1) return Math.floor(interval) + " hours ago"
+      interval = seconds / 60
+      if (interval > 1) return Math.floor(interval) + " minutes ago"
+      return Math.floor(seconds) + " seconds ago"
+    } catch (error) {
+      return "Unknown"
+    }
   }
 
   const handleAlertClick = (alert: any) => {
@@ -473,14 +1076,58 @@ export default function Component() {
     setShowAlertDetailsDialog(true)
   }
 
+  // Show loading state during hydration
+  if (!isMounted) {
+    return (
+      <div className={`min-h-screen ${getThemeClasses(viewMode).background} p-3 sm:p-6`}>
+        <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-gray-600">Loading dashboard...</div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-3 sm:p-6">
+    <div className={`min-h-screen ${getThemeClasses(viewMode).background} p-3 sm:p-6`}>
       <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+        {/* Upload Alert */}
+        {uploadAlert && (
+          <Alert
+            className={`${
+              uploadAlert.type === "success"
+                ? "border-green-200 bg-green-50"
+                : uploadAlert.type === "error"
+                  ? "border-red-200 bg-red-50"
+                  : "border-blue-200 bg-blue-50"
+            }`}
+          >
+            {uploadAlert.type === "success" && <CheckCircle className="h-4 w-4 text-green-600" />}
+            {uploadAlert.type === "error" && <AlertCircle className="h-4 w-4 text-red-600" />}
+            {uploadAlert.type === "info" && <AlertCircle className="h-4 w-4 text-blue-600" />}
+            <AlertDescription
+              className={`${
+                uploadAlert.type === "success"
+                  ? "text-green-800"
+                  : uploadAlert.type === "error"
+                    ? "text-red-800"
+                    : "text-blue-800"
+              }`}
+            >
+              {uploadAlert.message}
+            </AlertDescription>
+            <Button variant="ghost" size="sm" onClick={dismissAlert} className="absolute right-2 top-2 h-6 w-6 p-0">
+              <X className="h-3 w-3" />
+            </Button>
+          </Alert>
+        )}
+
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2 sm:gap-3">
-              <Shield className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
+              <Shield className={`w-6 h-6 sm:w-8 sm:h-8 ${getThemeClasses(viewMode).icon}`} />
               <span className="break-words">Passphrase Decryption Dashboard</span>
             </h1>
             <p className="text-sm sm:text-base text-gray-600 mt-1">
@@ -489,24 +1136,55 @@ export default function Component() {
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
             <Badge
-              variant={isRunning ? "default" : "secondary"}
-              className="px-2 sm:px-3 py-1 bg-blue-100 text-blue-800 border-blue-200 text-xs sm:text-sm"
+              className={`px-2 sm:px-3 py-1 ${getThemeClasses(viewMode).badge} text-xs sm:text-sm`}
             >
               {isRunning ? "RUNNING" : "PAUSED"}
             </Badge>
-            <div className="text-gray-500 text-xs sm:text-sm">{currentTime.toLocaleTimeString()}</div>
+            <div className="text-gray-500 text-xs sm:text-sm">
+              {currentTime ? currentTime.toLocaleTimeString() : "Loading..."}
+            </div>
           </div>
         </div>
 
+        {/* View Mode Toggle */}
+        <Card className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}>
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${viewMode === "live" ? "bg-green-500 animate-pulse" : "bg-orange-500"}`}></div>
+                  <span className="text-sm font-medium text-gray-900">
+                    {viewMode === "live" ? "LIVE MODE" : "TEST MODE"}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-600">
+                  {viewMode === "live" ? "Real-time data" : "Simulated environment"}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Label htmlFor="view-toggle" className="text-sm text-gray-700">
+                  Switch to {viewMode === "live" ? "Test" : "Live"} Mode
+                </Label>
+                <Switch
+                  id="view-toggle"
+                  checked={viewMode === "test"}
+                  onCheckedChange={(checked) => setViewMode(checked ? "test" : "live")}
+                  className="data-[state=checked]:bg-orange-600"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Control Panel */}
-        <Card className="bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg">
+        <Card className={getThemeClasses(viewMode).card}>
           <CardContent className="p-3 sm:p-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                 <Button
                   onClick={() => setIsRunning(!isRunning)}
                   variant={isRunning ? "destructive" : "default"}
-                  className="flex items-center gap-2 shadow-md text-sm"
+                  className={`flex items-center gap-2 shadow-md text-sm`}
                   size="sm"
                 >
                   {isRunning ? <Pause className="w-3 h-3 sm:w-4 sm:h-4" /> : <Play className="w-3 h-3 sm:w-4 sm:h-4" />}
@@ -514,7 +1192,7 @@ export default function Component() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="flex items-center gap-2 bg-white border-gray-300 hover:bg-gray-50 text-sm"
+                  className={`flex items-center gap-2 ${getThemeClasses(viewMode).buttonOutline} text-sm`}
                   size="sm"
                 >
                   <RotateCcw className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -536,7 +1214,7 @@ export default function Component() {
         {/* Main Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-6">
           {/* Miners Working */}
-          <Card className="bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg hover:shadow-xl transition-all duration-200">
+          <Card className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Active Miners</CardTitle>
               <Activity className="h-3 w-3 sm:h-4 sm:w-4 text-emerald-600" />
@@ -559,7 +1237,7 @@ export default function Component() {
           </Card>
 
           {/* Passphrases Remaining */}
-          <Card className="bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg hover:shadow-xl transition-all duration-200">
+          <Card className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Passphrases Remaining</CardTitle>
               <Zap className="h-3 w-3 sm:h-4 sm:w-4 text-amber-600" />
@@ -575,7 +1253,7 @@ export default function Component() {
           </Card>
 
           {/* Total Database */}
-          <Card className="bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg hover:shadow-xl transition-all duration-200">
+          <Card className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Total Database</CardTitle>
               <Database className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
@@ -592,7 +1270,7 @@ export default function Component() {
           </Card>
 
           {/* Days Remaining */}
-          <Card className="bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg hover:shadow-xl transition-all duration-200">
+          <Card className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Estimated Time</CardTitle>
               <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-purple-600" />
@@ -607,7 +1285,7 @@ export default function Component() {
           </Card>
 
           {/* Recent System Alerts */}
-          <Card className="bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg hover:shadow-xl transition-all duration-200 col-span-1 sm:col-span-2 lg:col-span-1">
+          <Card className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200 col-span-1 sm:col-span-2 lg:col-span-1`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Recent System Alerts</CardTitle>
               <BellRing className="h-3 w-3 sm:h-4 sm:w-4 text-red-600" />
@@ -646,42 +1324,8 @@ export default function Component() {
           </Card>
         </div>
 
-        {/* Progress Overview */}
-        <Card className="bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-gray-900">Decryption Progress</CardTitle>
-            <CardDescription className="text-gray-600">Overall progress and performance metrics</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Progress</span>
-                <span className="text-gray-900">{progressPercentage.toFixed(2)}%</span>
-              </div>
-              <Progress value={progressPercentage} className="h-3" />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 pt-4">
-              <div className="text-center">
-                <div className="text-base sm:text-lg font-semibold text-gray-900">
-                  {(dashboardData.totalPassphrases - dashboardData.passphrasesToRun).toLocaleString()}
-                </div>
-                <div className="text-xs text-gray-600">Processed</div>
-              </div>
-              <div className="text-center">
-                <div className="text-base sm:text-lg font-semibold text-gray-900">{dashboardData.hashRate}</div>
-                <div className="text-xs text-gray-600">Current Rate</div>
-              </div>
-              <div className="text-center">
-                <div className="text-base sm:text-lg font-semibold text-gray-900">{dashboardData.lastSuccess}</div>
-                <div className="text-xs text-gray-600">Last Success</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Passphrase Management */}
-        <Card className="bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg">
+        <Card className={getThemeClasses(viewMode).card}>
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -706,7 +1350,7 @@ export default function Component() {
                 </Button>
                 <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
                   <DialogTrigger asChild>
-                    <Button className="flex items-center gap-1 sm:gap-2 bg-blue-600 hover:bg-blue-700 shadow-md text-xs sm:text-sm">
+                    <Button className={`flex items-center gap-1 sm:gap-2 ${getThemeClasses(viewMode).button} shadow-md text-xs sm:text-sm`}>
                       <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
                       Add Passphrase
                     </Button>
@@ -756,7 +1400,7 @@ export default function Component() {
                       <Button
                         onClick={handleAddPassphrase}
                         disabled={!newPassphrase.trim()}
-                        className="bg-blue-600 hover:bg-blue-700"
+                        className={getThemeClasses(viewMode).button}
                       >
                         Add Passphrase
                       </Button>
@@ -779,14 +1423,163 @@ export default function Component() {
                 />
               </div>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="bg-white border-gray-300 hover:bg-gray-50 text-xs flex-1 sm:flex-none"
-                >
-                  <Upload className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                  Import
-                </Button>
+                {/* File Upload Button */}
+                <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="bg-white border-gray-300 hover:bg-gray-50 text-xs flex-1 sm:flex-none"
+                    >
+                      <Upload className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                      Import
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-white border-gray-200 max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle className="text-gray-900">Import Passphrases</DialogTitle>
+                      <DialogDescription className="text-gray-600">
+                        Upload CSV, TXT, or Excel files containing passphrases to add to your database
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      {/* File Upload Area */}
+                      <div
+                        className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                          dragActive ? "border-blue-400 bg-blue-50" : "border-gray-300 hover:border-gray-400"
+                        }`}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                      >
+                        <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                        <div className="space-y-2">
+                          <p className="text-lg font-medium text-gray-900">Drop your files here, or click to browse</p>
+                          <p className="text-sm text-gray-600">
+                            Supports CSV, TXT, and Excel files (.csv, .txt, .xls, .xlsx) up to 10MB
+                          </p>
+                        </div>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".csv,.txt,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain"
+                          onChange={handleFileInputChange}
+                          className="hidden"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="mt-4 bg-transparent"
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          Choose Files
+                        </Button>
+                      </div>
+
+                      {/* Upload Progress */}
+                      {uploadProgress.length > 0 && (
+                        <div className="space-y-3">
+                          <h4 className="font-medium text-gray-900">Upload Progress</h4>
+                          {uploadProgress.map((progress) => {
+                            const file = uploadedFiles.find((f) => f.id === progress.fileId)
+                            return (
+                              <div key={progress.fileId} className="space-y-2">
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-gray-700 truncate">{file?.name}</span>
+                                  <span className="text-gray-500">
+                                    {progress.status === "uploading" && `${progress.progress}%`}
+                                    {progress.status === "processing" && "Processing..."}
+                                    {progress.status === "complete" && "Complete"}
+                                    {progress.status === "error" && "Error"}
+                                  </span>
+                                </div>
+                                <Progress
+                                  value={progress.status === "complete" ? 100 : progress.progress}
+                                  className="h-2"
+                                />
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+
+                      {/* Uploaded Files List */}
+                      {uploadedFiles.length > 0 && (
+                        <div className="space-y-3">
+                          <h4 className="font-medium text-gray-900">Recent Uploads</h4>
+                          <div className="space-y-2 max-h-40 overflow-y-auto">
+                            {uploadedFiles.slice(-5).map((file) => (
+                              <div
+                                key={file.id}
+                                className="flex items-center justify-between p-2 bg-gray-50 rounded-md"
+                              >
+                                <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                  <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
+                                    <p className="text-xs text-gray-500">
+                                      {formatFileSize(file.size)} • {file.uploadDate.toLocaleDateString()}
+                                      {file.processedCount && ` • ${file.processedCount} passphrases`}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Badge
+                                    className={`text-xs ${
+                                      file.status === "success"
+                                        ? "bg-green-100 text-green-700 border-green-200"
+                                        : file.status === "error"
+                                          ? "bg-red-100 text-red-700 border-red-200"
+                                          : "bg-yellow-100 text-yellow-700 border-yellow-200"
+                                    }`}
+                                  >
+                                    {file.status === "success" && <CheckCircle className="h-3 w-3 mr-1" />}
+                                    {file.status === "error" && <AlertCircle className="h-3 w-3 mr-1" />}
+                                    {file.status}
+                                  </Badge>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => removeUploadedFile(file.id)}
+                                    className="h-6 w-6 p-0"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* File Format Information */}
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <h4 className="font-medium text-blue-900 mb-2">File Format Requirements</h4>
+                        <ul className="text-sm text-blue-800 space-y-1">
+                          <li>• CSV files should have headers: passphrase, description, priority</li>
+                          <li>
+                            • TXT files should have one passphrase per line (description and priority will default to
+                            "Imported" and "Medium")
+                          </li>
+                          <li>• Excel files should have data starting from row 1 with headers</li>
+                          <li>• Priority values: High, Medium, Low (optional, defaults to Medium)</li>
+                          <li>• Maximum file size: 10MB</li>
+                          <li>• Supported formats: .csv, .txt, .xls, .xlsx</li>
+                        </ul>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowUploadDialog(false)}
+                        className="bg-white border-gray-300"
+                      >
+                        Close
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
                 <Button
                   variant="outline"
                   size="sm"
@@ -958,19 +1751,19 @@ export default function Component() {
         </Card>
 
         {/* Miner Management */}
-        <Card className="bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg">
+        <Card className={getThemeClasses(viewMode).card}>
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <CardTitle className="text-lg sm:text-xl text-gray-900">Miner Management</CardTitle>
                 <CardDescription className="text-sm text-gray-600">
-                  Control and monitor your Runpod and Mac miners
+                  Control and monitor your Runpod and Mac miners via SSH
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
                 <Dialog open={showAddMinerDialog} onOpenChange={setShowAddMinerDialog}>
                   <DialogTrigger asChild>
-                    <Button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 shadow-md">
+                    <Button className={`flex items-center gap-2 ${getThemeClasses(viewMode).button} shadow-md`}>
                       <Plus className="w-4 h-4" />
                       Add Miner
                     </Button>
@@ -1113,7 +1906,7 @@ export default function Component() {
                       <Button
                         onClick={handleAddMiner}
                         disabled={!newMinerConfig.name.trim()}
-                        className="bg-blue-600 hover:bg-blue-700"
+                        className={getThemeClasses(viewMode).button}
                       >
                         Add Miner
                       </Button>
@@ -1164,31 +1957,57 @@ export default function Component() {
                               <div className="text-xs text-gray-600">{miner.cost}</div>
                             </div>
                             <div className="flex items-center justify-center gap-2 flex-wrap">
+                              {/* SSH Operation Buttons */}
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleMinerAction("runpod", miner.id, "start")}
-                                disabled={miner.status === "running"}
-                                className="bg-white border-emerald-300 text-emerald-700 hover:bg-emerald-50 p-1.5"
+                                onClick={() => handleSSHOperation(miner.id, "runpod", "continue")}
+                                disabled={isOperationInProgress(miner.id, "continue")}
+                                className={`bg-white ${getOperationColor("continue")} p-1.5`}
+                                title="Continue Miner"
                               >
-                                <Play className="w-3 h-3" />
+                                {isOperationInProgress(miner.id, "continue") ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  getOperationIcon("continue")
+                                )}
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleMinerAction("runpod", miner.id, "stop")}
-                                disabled={miner.status === "stopped"}
-                                className="bg-white border-red-300 text-red-700 hover:bg-red-50 p-1.5"
+                                onClick={() => handleSSHOperation(miner.id, "runpod", "refresh")}
+                                disabled={isOperationInProgress(miner.id, "refresh")}
+                                className={`bg-white ${getOperationColor("refresh")} p-1.5`}
+                                title="Refresh Miner"
                               >
-                                <PowerOff className="w-3 h-3" />
+                                {isOperationInProgress(miner.id, "refresh") ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  getOperationIcon("refresh")
+                                )}
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleMinerAction("runpod", miner.id, "restart")}
-                                className="bg-white border-amber-300 text-amber-700 hover:bg-amber-50 p-1.5"
+                                onClick={() => handleSSHOperation(miner.id, "runpod", "stop")}
+                                disabled={isOperationInProgress(miner.id, "stop")}
+                                className={`bg-white ${getOperationColor("stop")} p-1.5`}
+                                title="Stop Miner"
                               >
-                                <RefreshCw className="w-3 h-3" />
+                                {isOperationInProgress(miner.id, "stop") ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  getOperationIcon("stop")
+                                )}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openSSHConfig(miner.id, "runpod")}
+                                className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 p-1.5"
+                                title="SSH Config"
+                              >
+                                <Terminal className="w-3 h-3" />
                               </Button>
                               <Button
                                 size="sm"
@@ -1202,14 +2021,10 @@ export default function Component() {
                             </div>
                           </div>
                         </div>
-                        <div className="grid grid-cols-3 gap-2 sm:gap-4 mt-3 pt-3 border-t border-gray-200">
+                        <div className="grid grid-cols-2 gap-2 sm:gap-4 mt-3 pt-3 border-t border-gray-200">
                           <div className="text-center">
                             <div className="text-xs sm:text-sm font-medium text-gray-900">{miner.uptime}</div>
                             <div className="text-xs text-gray-600">Uptime</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-xs sm:text-sm font-medium text-gray-900">{miner.temperature}</div>
-                            <div className="text-xs text-gray-600">Temperature</div>
                           </div>
                           <div className="text-center">
                             <div
@@ -1258,31 +2073,57 @@ export default function Component() {
                               <div className="text-xs text-gray-600">Hash Rate</div>
                             </div>
                             <div className="flex items-center justify-center gap-2 flex-wrap">
+                              {/* SSH Operation Buttons */}
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleMinerAction("mac", miner.id, "start")}
-                                disabled={miner.status === "running"}
-                                className="bg-white border-emerald-300 text-emerald-700 hover:bg-emerald-50 p-1.5"
+                                onClick={() => handleSSHOperation(miner.id, "mac", "continue")}
+                                disabled={isOperationInProgress(miner.id, "continue")}
+                                className={`bg-white ${getOperationColor("continue")} p-1.5`}
+                                title="Continue Miner"
                               >
-                                <Play className="w-3 h-3" />
+                                {isOperationInProgress(miner.id, "continue") ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  getOperationIcon("continue")
+                                )}
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleMinerAction("mac", miner.id, "stop")}
-                                disabled={miner.status === "stopped"}
-                                className="bg-white border-red-300 text-red-700 hover:bg-red-50 p-1.5"
+                                onClick={() => handleSSHOperation(miner.id, "mac", "refresh")}
+                                disabled={isOperationInProgress(miner.id, "refresh")}
+                                className={`bg-white ${getOperationColor("refresh")} p-1.5`}
+                                title="Refresh Miner"
                               >
-                                <PowerOff className="w-3 h-3" />
+                                {isOperationInProgress(miner.id, "refresh") ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  getOperationIcon("refresh")
+                                )}
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleMinerAction("mac", miner.id, "restart")}
-                                className="bg-white border-amber-300 text-amber-700 hover:bg-amber-50 p-1.5"
+                                onClick={() => handleSSHOperation(miner.id, "mac", "stop")}
+                                disabled={isOperationInProgress(miner.id, "stop")}
+                                className={`bg-white ${getOperationColor("stop")} p-1.5`}
+                                title="Stop Miner"
                               >
-                                <RefreshCw className="w-3 h-3" />
+                                {isOperationInProgress(miner.id, "stop") ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  getOperationIcon("stop")
+                                )}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openSSHConfig(miner.id, "mac")}
+                                className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 p-1.5"
+                                title="SSH Config"
+                              >
+                                <Terminal className="w-3 h-3" />
                               </Button>
                               <Button
                                 size="sm"
@@ -1296,14 +2137,10 @@ export default function Component() {
                             </div>
                           </div>
                         </div>
-                        <div className="grid grid-cols-3 gap-2 sm:gap-4 mt-3 pt-3 border-t border-gray-200">
+                        <div className="grid grid-cols-2 gap-2 sm:gap-4 mt-3 pt-3 border-t border-gray-200">
                           <div className="text-center">
                             <div className="text-xs sm:text-sm font-medium text-gray-900">{miner.uptime}</div>
                             <div className="text-xs text-gray-600">Uptime</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-xs sm:text-sm font-medium text-gray-900">{miner.temperature}</div>
-                            <div className="text-xs text-gray-600">Temperature</div>
                           </div>
                           <div className="text-center">
                             <div
@@ -1326,6 +2163,151 @@ export default function Component() {
             </Tabs>
           </CardContent>
         </Card>
+
+        {/* SSH Configuration Dialog */}
+        <Dialog open={showSSHConfigDialog} onOpenChange={setShowSSHConfigDialog}>
+          <DialogContent className="bg-white border-gray-200 max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-gray-900 flex items-center gap-2">
+                <Terminal className="w-5 h-5 text-blue-600" />
+                SSH Configuration - {selectedMinerForSSH?.name}
+              </DialogTitle>
+              <DialogDescription className="text-gray-600">
+                Configure SSH connection settings for remote miner operations
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="ssh-host" className="text-gray-700">
+                    Host/IP Address
+                  </Label>
+                  <Input
+                    id="ssh-host"
+                    value={sshConfig.host}
+                    onChange={(e) => setSSHConfig((prev) => ({ ...prev, host: e.target.value }))}
+                    placeholder="192.168.1.100 or hostname"
+                    className="bg-white border-gray-300 text-gray-900"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="ssh-port" className="text-gray-700">
+                    Port
+                  </Label>
+                  <Input
+                    id="ssh-port"
+                    type="number"
+                    value={sshConfig.port}
+                    onChange={(e) => setSSHConfig((prev) => ({ ...prev, port: Number.parseInt(e.target.value) || 22 }))}
+                    placeholder="22"
+                    className="bg-white border-gray-300 text-gray-900"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ssh-username" className="text-gray-700">
+                  Username
+                </Label>
+                <Input
+                  id="ssh-username"
+                  value={sshConfig.username}
+                  onChange={(e) => setSSHConfig((prev) => ({ ...prev, username: e.target.value }))}
+                  placeholder="root or admin"
+                  className="bg-white border-gray-300 text-gray-900"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ssh-password" className="text-gray-700">
+                  Password (Optional - use private key for better security)
+                </Label>
+                <Input
+                  id="ssh-password"
+                  type="password"
+                  value={sshConfig.password}
+                  onChange={(e) => setSSHConfig((prev) => ({ ...prev, password: e.target.value }))}
+                  placeholder="SSH password"
+                  className="bg-white border-gray-300 text-gray-900"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ssh-private-key" className="text-gray-700">
+                  Private Key (Recommended)
+                </Label>
+                <Textarea
+                  id="ssh-private-key"
+                  value={sshConfig.privateKey}
+                  onChange={(e) => setSSHConfig((prev) => ({ ...prev, privateKey: e.target.value }))}
+                  placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
+                  className="bg-white border-gray-300 text-gray-900 font-mono text-sm"
+                  rows={4}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ssh-working-dir" className="text-gray-700">
+                  Working Directory
+                </Label>
+                <Input
+                  id="ssh-working-dir"
+                  value={sshConfig.workingDirectory}
+                  onChange={(e) => setSSHConfig((prev) => ({ ...prev, workingDirectory: e.target.value }))}
+                  placeholder="/home/user/miner"
+                  className="bg-white border-gray-300 text-gray-900"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ssh-process-name" className="text-gray-700">
+                  Process Name
+                </Label>
+                <Input
+                  id="ssh-process-name"
+                  value={sshConfig.processName}
+                  onChange={(e) => setSSHConfig((prev) => ({ ...prev, processName: e.target.value }))}
+                  placeholder="bip38_miner"
+                  className="bg-white border-gray-300 text-gray-900"
+                />
+              </div>
+
+              {/* SSH Commands Preview */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 mb-2">SSH Commands Preview</h4>
+                <div className="space-y-2 text-sm font-mono">
+                  <div>
+                    <span className="text-green-600">Continue:</span>{" "}
+                    <span className="text-gray-700">
+                      cd {sshConfig.workingDirectory} && ./{sshConfig.processName} --resume
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-amber-600">Refresh:</span>{" "}
+                    <span className="text-gray-700">
+                      cd {sshConfig.workingDirectory} && pkill {sshConfig.processName} && ./{sshConfig.processName}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-red-600">Stop:</span>{" "}
+                    <span className="text-gray-700">pkill {sshConfig.processName}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowSSHConfigDialog(false)}
+                className="bg-white border-gray-300"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={saveSSHConfig}
+                disabled={!sshConfig.host || !sshConfig.username}
+                className={getThemeClasses(viewMode).button}
+              >
+                Save Configuration
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Delete Confirmation Dialog */}
         <Dialog
@@ -1391,7 +2373,13 @@ export default function Component() {
 
                   <Label className="text-gray-700 font-medium">Timestamp:</Label>
                   <span className="text-gray-900">
-                    {selectedAlert.timestamp.toLocaleString()} ({formatTimeAgo(selectedAlert.timestamp)})
+                    {isMounted && selectedAlert.timestamp ? (
+                      <>
+                        {selectedAlert.timestamp.toLocaleString()} ({formatTimeAgo(selectedAlert.timestamp)})
+                      </>
+                    ) : (
+                      "Loading..."
+                    )}
                   </span>
 
                   <Label className="text-gray-700 font-medium col-span-2">Description:</Label>
