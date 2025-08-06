@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Server, Monitor, Wifi, WifiOff, RefreshCw, PowerOff, BellRing } from 'lucide-react'
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Switch } from "@/components/ui/switch"
 
 // File upload types and interfaces
 interface UploadedFile {
@@ -100,6 +101,9 @@ export default function Component() {
     processName: "miner_process",
   })
   const [showSSHConfigDialog, setShowSSHConfigDialog] = useState(false)
+
+  // View mode state
+  const [viewMode, setViewMode] = useState<"live" | "test">("live")
 
   // Mock data - replace with real data from your application
   const [dashboardData, setDashboardData] = useState({
@@ -671,6 +675,31 @@ export default function Component() {
     setUploadAlert(null)
   }
 
+  const getThemeClasses = (viewMode: "live" | "test") => {
+    if (viewMode === "test") {
+      return {
+        background: "bg-gradient-to-br from-orange-50 via-red-50 to-pink-50",
+        card: "bg-white/80 backdrop-blur-sm border-orange-200 shadow-lg",
+        cardHover: "hover:shadow-xl",
+        button: "bg-orange-600 hover:bg-orange-700",
+        buttonOutline: "bg-white border-orange-300 hover:bg-orange-50",
+        badge: "bg-orange-100 text-orange-800 border-orange-200",
+        accent: "text-orange-600",
+        icon: "text-orange-600"
+      }
+    }
+    return {
+      background: "bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50",
+      card: "bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg",
+      cardHover: "hover:shadow-xl",
+      button: "bg-blue-600 hover:bg-blue-700",
+      buttonOutline: "bg-white border-gray-300 hover:bg-gray-50",
+      badge: "bg-blue-100 text-blue-800 border-blue-200",
+      accent: "text-blue-600",
+      icon: "text-blue-600"
+    }
+  }
+
   // Handle client-side mounting
   useEffect(() => {
     setIsMounted(true)
@@ -942,7 +971,7 @@ export default function Component() {
       case "stopped":
         return "bg-red-100 text-red-700 border-red-200"
       case "idle":
-        return "bg-amber-100 text-amber-700 border-amber-200"
+        return "bg-amber-100 text-amber-200"
       default:
         return "bg-gray-100 text-gray-700 border-gray-200"
     }
@@ -978,7 +1007,7 @@ export default function Component() {
   // Show loading state during hydration
   if (!isMounted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-3 sm:p-6">
+      <div className={`min-h-screen ${getThemeClasses(viewMode).background} p-3 sm:p-6`}>
         <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="text-gray-600">Loading dashboard...</div>
@@ -989,7 +1018,7 @@ export default function Component() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-3 sm:p-6">
+    <div className={`min-h-screen ${getThemeClasses(viewMode).background} p-3 sm:p-6`}>
       <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
         {/* Upload Alert */}
         {uploadAlert && (
@@ -1026,7 +1055,7 @@ export default function Component() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2 sm:gap-3">
-              <Shield className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
+              <Shield className={`w-6 h-6 sm:w-8 sm:h-8 ${getThemeClasses(viewMode).icon}`} />
               <span className="break-words">Passphrase Decryption Dashboard</span>
             </h1>
             <p className="text-sm sm:text-base text-gray-600 mt-1">
@@ -1035,8 +1064,7 @@ export default function Component() {
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
             <Badge
-              variant={isRunning ? "default" : "secondary"}
-              className="px-2 sm:px-3 py-1 bg-blue-100 text-blue-800 border-blue-200 text-xs sm:text-sm"
+              className={`px-2 sm:px-3 py-1 ${getThemeClasses(viewMode).badge} text-xs sm:text-sm`}
             >
               {isRunning ? "RUNNING" : "PAUSED"}
             </Badge>
@@ -1046,15 +1074,45 @@ export default function Component() {
           </div>
         </div>
 
+        {/* View Mode Toggle */}
+        <Card className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}>
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${viewMode === "live" ? "bg-green-500 animate-pulse" : "bg-orange-500"}`}></div>
+                  <span className="text-sm font-medium text-gray-900">
+                    {viewMode === "live" ? "LIVE MODE" : "TEST MODE"}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-600">
+                  {viewMode === "live" ? "Real-time data" : "Simulated environment"}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Label htmlFor="view-toggle" className="text-sm text-gray-700">
+                  Switch to {viewMode === "live" ? "Test" : "Live"} Mode
+                </Label>
+                <Switch
+                  id="view-toggle"
+                  checked={viewMode === "test"}
+                  onCheckedChange={(checked) => setViewMode(checked ? "test" : "live")}
+                  className="data-[state=checked]:bg-orange-600"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Control Panel */}
-        <Card className="bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg">
+        <Card className={getThemeClasses(viewMode).card}>
           <CardContent className="p-3 sm:p-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                 <Button
                   onClick={() => setIsRunning(!isRunning)}
                   variant={isRunning ? "destructive" : "default"}
-                  className="flex items-center gap-2 shadow-md text-sm"
+                  className={`flex items-center gap-2 shadow-md text-sm`}
                   size="sm"
                 >
                   {isRunning ? <Pause className="w-3 h-3 sm:w-4 sm:h-4" /> : <Play className="w-3 h-3 sm:w-4 sm:h-4" />}
@@ -1062,7 +1120,7 @@ export default function Component() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="flex items-center gap-2 bg-white border-gray-300 hover:bg-gray-50 text-sm"
+                  className={`flex items-center gap-2 ${getThemeClasses(viewMode).buttonOutline} text-sm`}
                   size="sm"
                 >
                   <RotateCcw className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -1084,7 +1142,7 @@ export default function Component() {
         {/* Main Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-6">
           {/* Miners Working */}
-          <Card className="bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg hover:shadow-xl transition-all duration-200">
+          <Card className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Active Miners</CardTitle>
               <Activity className="h-3 w-3 sm:h-4 sm:w-4 text-emerald-600" />
@@ -1107,7 +1165,7 @@ export default function Component() {
           </Card>
 
           {/* Passphrases Remaining */}
-          <Card className="bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg hover:shadow-xl transition-all duration-200">
+          <Card className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Passphrases Remaining</CardTitle>
               <Zap className="h-3 w-3 sm:h-4 sm:w-4 text-amber-600" />
@@ -1123,7 +1181,7 @@ export default function Component() {
           </Card>
 
           {/* Total Database */}
-          <Card className="bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg hover:shadow-xl transition-all duration-200">
+          <Card className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Total Database</CardTitle>
               <Database className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
@@ -1140,7 +1198,7 @@ export default function Component() {
           </Card>
 
           {/* Days Remaining */}
-          <Card className="bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg hover:shadow-xl transition-all duration-200">
+          <Card className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Estimated Time</CardTitle>
               <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-purple-600" />
@@ -1155,7 +1213,7 @@ export default function Component() {
           </Card>
 
           {/* Recent System Alerts */}
-          <Card className="bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg hover:shadow-xl transition-all duration-200 col-span-1 sm:col-span-2 lg:col-span-1">
+          <Card className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200 col-span-1 sm:col-span-2 lg:col-span-1`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Recent System Alerts</CardTitle>
               <BellRing className="h-3 w-3 sm:h-4 sm:w-4 text-red-600" />
@@ -1195,7 +1253,7 @@ export default function Component() {
         </div>
 
         {/* Passphrase Management */}
-        <Card className="bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg">
+        <Card className={getThemeClasses(viewMode).card}>
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -1220,7 +1278,7 @@ export default function Component() {
                 </Button>
                 <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
                   <DialogTrigger asChild>
-                    <Button className="flex items-center gap-1 sm:gap-2 bg-blue-600 hover:bg-blue-700 shadow-md text-xs sm:text-sm">
+                    <Button className={`flex items-center gap-1 sm:gap-2 ${getThemeClasses(viewMode).button} shadow-md text-xs sm:text-sm`}>
                       <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
                       Add Passphrase
                     </Button>
@@ -1270,7 +1328,7 @@ export default function Component() {
                       <Button
                         onClick={handleAddPassphrase}
                         disabled={!newPassphrase.trim()}
-                        className="bg-blue-600 hover:bg-blue-700"
+                        className={getThemeClasses(viewMode).button}
                       >
                         Add Passphrase
                       </Button>
@@ -1621,7 +1679,7 @@ export default function Component() {
         </Card>
 
         {/* Miner Management */}
-        <Card className="bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg">
+        <Card className={getThemeClasses(viewMode).card}>
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -1633,7 +1691,7 @@ export default function Component() {
               <div className="flex items-center gap-2">
                 <Dialog open={showAddMinerDialog} onOpenChange={setShowAddMinerDialog}>
                   <DialogTrigger asChild>
-                    <Button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 shadow-md">
+                    <Button className={`flex items-center gap-2 ${getThemeClasses(viewMode).button} shadow-md`}>
                       <Plus className="w-4 h-4" />
                       Add Miner
                     </Button>
@@ -1776,7 +1834,7 @@ export default function Component() {
                       <Button
                         onClick={handleAddMiner}
                         disabled={!newMinerConfig.name.trim()}
-                        className="bg-blue-600 hover:bg-blue-700"
+                        className={getThemeClasses(viewMode).button}
                       >
                         Add Miner
                       </Button>
@@ -2171,7 +2229,7 @@ export default function Component() {
               <Button
                 onClick={saveSSHConfig}
                 disabled={!sshConfig.host || !sshConfig.username}
-                className="bg-blue-600 hover:bg-blue-700"
+                className={getThemeClasses(viewMode).button}
               >
                 Save Configuration
               </Button>
