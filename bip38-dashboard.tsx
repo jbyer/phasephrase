@@ -21,7 +21,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Plus, Trash2, Eye, EyeOff, Download, Upload, FileText, AlertCircle, CheckCircle, X, Terminal, Loader2 } from 'lucide-react'
+import { Search, Plus, Trash2, Eye, EyeOff, Download, Upload, FileText, AlertCircle, CheckCircle, X, Terminal, Loader2, Edit } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Server, Monitor, Wifi, WifiOff, RefreshCw, PowerOff, BellRing } from 'lucide-react'
@@ -383,6 +383,18 @@ export default function Component() {
     cpu: "",
     cores: "",
     memory: "",
+  })
+
+  const [showEditMinerDialog, setShowEditMinerDialog] = useState(false)
+  const [editMinerConfig, setEditMinerConfig] = useState({
+    id: "",
+    name: "",
+    gpu: "",
+    region: "",
+    cpu: "",
+    cores: "",
+    memory: "",
+    type: "runpod" as "runpod" | "mac"
   })
 
   const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<{
@@ -986,6 +998,77 @@ export default function Component() {
 
       setNewMinerConfig({ name: "", gpu: "", region: "", cpu: "", cores: "", memory: "" })
       setShowAddMinerDialog(false)
+    }
+  }
+
+  const handleEditMiner = () => {
+    if (editMinerConfig.name.trim() && editMinerConfig.id) {
+      setMiners((prev) => ({
+        ...prev,
+        [editMinerConfig.type]: prev[editMinerConfig.type].map((miner) => {
+          if (miner.id === editMinerConfig.id) {
+            if (editMinerConfig.type === "runpod") {
+              return {
+                ...miner,
+                name: editMinerConfig.name,
+                gpu: editMinerConfig.gpu || miner.gpu,
+                region: editMinerConfig.region || miner.region,
+              }
+            } else {
+              return {
+                ...miner,
+                name: editMinerConfig.name,
+                cpu: editMinerConfig.cpu || miner.cpu,
+                cores: Number.parseInt(editMinerConfig.cores) || miner.cores,
+                memory: editMinerConfig.memory || miner.memory,
+              }
+            }
+          }
+          return miner
+        }),
+      }))
+
+      setEditMinerConfig({
+        id: "",
+        name: "",
+        gpu: "",
+        region: "",
+        cpu: "",
+        cores: "",
+        memory: "",
+        type: "runpod"
+      })
+      setShowEditMinerDialog(false)
+    }
+  }
+
+  const openEditMiner = (type: "runpod" | "mac", minerId: string) => {
+    const miner = miners[type].find((m) => m.id === minerId)
+    if (miner) {
+      if (type === "runpod") {
+        setEditMinerConfig({
+          id: minerId,
+          name: miner.name,
+          gpu: miner.gpu,
+          region: miner.region,
+          cpu: "",
+          cores: "",
+          memory: "",
+          type: "runpod"
+        })
+      } else {
+        setEditMinerConfig({
+          id: minerId,
+          name: miner.name,
+          gpu: "",
+          region: "",
+          cpu: miner.cpu,
+          cores: miner.cores.toString(),
+          memory: miner.memory,
+          type: "mac"
+        })
+      }
+      setShowEditMinerDialog(true)
     }
   }
 
@@ -2012,6 +2095,15 @@ export default function Component() {
                               <Button
                                 size="sm"
                                 variant="outline"
+                                onClick={() => openEditMiner("runpod", miner.id)}
+                                className="bg-white border-blue-300 text-blue-700 hover:bg-blue-50 p-1.5"
+                                title="Edit Miner"
+                              >
+                                <Edit className="w-3 h-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
                                 onClick={() => handleDeleteMiner("runpod", miner.id)}
                                 className="bg-white border-red-300 text-red-700 hover:bg-red-50 p-1.5"
                                 title="Remove Miner"
@@ -2128,6 +2220,15 @@ export default function Component() {
                               <Button
                                 size="sm"
                                 variant="outline"
+                                onClick={() => openEditMiner("mac", miner.id)}
+                                className="bg-white border-blue-300 text-blue-700 hover:bg-blue-50 p-1.5"
+                                title="Edit Miner"
+                              >
+                                <Edit className="w-3 h-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
                                 onClick={() => handleDeleteMiner("mac", miner.id)}
                                 className="bg-white border-red-300 text-red-700 hover:bg-red-50 p-1.5"
                                 title="Remove Miner"
@@ -2163,6 +2264,140 @@ export default function Component() {
             </Tabs>
           </CardContent>
         </Card>
+
+        {/* Edit Miner Dialog */}
+        <Dialog open={showEditMinerDialog} onOpenChange={setShowEditMinerDialog}>
+          <DialogContent className="bg-white border-gray-200">
+            <DialogHeader>
+              <DialogTitle className="text-gray-900">Edit Miner</DialogTitle>
+              <DialogDescription className="text-gray-600">
+                Modify the details of your {editMinerConfig.type === "runpod" ? "Runpod" : "Mac"} miner
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-miner-name" className="text-gray-700">
+                  Miner Name
+                </Label>
+                <Input
+                  id="edit-miner-name"
+                  value={editMinerConfig.name}
+                  onChange={(e) => setEditMinerConfig((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="Enter miner name..."
+                  className="bg-white border-gray-300 text-gray-900"
+                />
+              </div>
+              {editMinerConfig.type === "runpod" ? (
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-gpu" className="text-gray-700">
+                      GPU Model
+                    </Label>
+                    <Select
+                      value={editMinerConfig.gpu}
+                      onValueChange={(value) => setEditMinerConfig((prev) => ({ ...prev, gpu: value }))}
+                    >
+                      <SelectTrigger className="bg-white border-gray-300 text-gray-900">
+                        <SelectValue placeholder="Select GPU" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white border-gray-200">
+                        <SelectItem value="RTX 4090">RTX 4090</SelectItem>
+                        <SelectItem value="RTX 4080">RTX 4080</SelectItem>
+                        <SelectItem value="RTX 3090">RTX 3090</SelectItem>
+                        <SelectItem value="RTX 3080">RTX 3080</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-region" className="text-gray-700">
+                      Region
+                    </Label>
+                    <Select
+                      value={editMinerConfig.region}
+                      onValueChange={(value) => setEditMinerConfig((prev) => ({ ...prev, region: value }))}
+                    >
+                      <SelectTrigger className="bg-white border-gray-300 text-gray-900">
+                        <SelectValue placeholder="Select region" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white border-gray-200">
+                        <SelectItem value="US-West">US West</SelectItem>
+                        <SelectItem value="US-East">US East</SelectItem>
+                        <SelectItem value="EU-Central">EU Central</SelectItem>
+                        <SelectItem value="Asia-Pacific">Asia Pacific</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-cpu" className="text-gray-700">
+                      CPU Model
+                    </Label>
+                    <Select
+                      value={editMinerConfig.cpu}
+                      onValueChange={(value) => setEditMinerConfig((prev) => ({ ...prev, cpu: value }))}
+                    >
+                      <SelectTrigger className="bg-white border-gray-300 text-gray-900">
+                        <SelectValue placeholder="Select CPU" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white border-gray-200">
+                        <SelectItem value="M3 Pro">M3 Pro</SelectItem>
+                        <SelectItem value="M3 Max">M3 Max</SelectItem>
+                        <SelectItem value="M2 Ultra">M2 Ultra</SelectItem>
+                        <SelectItem value="M2 Pro">M2 Pro</SelectItem>
+                        <SelectItem value="M1">M1</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="edit-cores" className="text-gray-700">
+                        CPU Cores
+                      </Label>
+                      <Input
+                        id="edit-cores"
+                        type="number"
+                        value={editMinerConfig.cores}
+                        onChange={(e) => setEditMinerConfig((prev) => ({ ...prev, cores: e.target.value }))}
+                        placeholder="8"
+                        className="bg-white border-gray-300 text-gray-900"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="edit-memory" className="text-gray-700">
+                        Memory
+                      </Label>
+                      <Input
+                        id="edit-memory"
+                        value={editMinerConfig.memory}
+                        onChange={(e) => setEditMinerConfig((prev) => ({ ...prev, memory: e.target.value }))}
+                        placeholder="16GB"
+                        className="bg-white border-gray-300 text-gray-900"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowEditMinerDialog(false)}
+                className="bg-white border-gray-300"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleEditMiner}
+                disabled={!editMinerConfig.name.trim()}
+                className={getThemeClasses(viewMode).button}
+              >
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* SSH Configuration Dialog */}
         <Dialog open={showSSHConfigDialog} onOpenChange={setShowSSHConfigDialog}>
