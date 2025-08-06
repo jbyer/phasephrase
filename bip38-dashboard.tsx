@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Activity, Database, Clock, Zap, Play, Pause, RotateCcw, Shield, Key } from "lucide-react"
+import { Activity, Database, Clock, Zap, Play, Pause, RotateCcw, Shield, Key } from 'lucide-react'
 import { Input } from "@/components/ui/input"
 import {
   Dialog,
@@ -21,24 +21,10 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import {
-  Search,
-  Plus,
-  Trash2,
-  Eye,
-  EyeOff,
-  Download,
-  Upload,
-  FileText,
-  AlertCircle,
-  CheckCircle,
-  X,
-  Terminal,
-  Loader2,
-} from "lucide-react"
+import { Search, Plus, Trash2, Eye, EyeOff, Download, Upload, FileText, AlertCircle, CheckCircle, X, Terminal, Loader2 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Server, Monitor, Wifi, WifiOff, RefreshCw, PowerOff, BellRing } from "lucide-react"
+import { Server, Monitor, Wifi, WifiOff, RefreshCw, PowerOff, BellRing } from 'lucide-react'
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 // File upload types and interfaces
@@ -1207,40 +1193,6 @@ export default function Component() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Progress Overview */}
-        <Card className="bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-gray-900">Decryption Progress</CardTitle>
-            <CardDescription className="text-gray-600">Overall progress and performance metrics</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Progress</span>
-                <span className="text-gray-900">{progressPercentage.toFixed(2)}%</span>
-              </div>
-              <Progress value={progressPercentage} className="h-3" />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 pt-4">
-              <div className="text-center">
-                <div className="text-base sm:text-lg font-semibold text-gray-900">
-                  {(dashboardData.totalPassphrases - dashboardData.passphrasesToRun).toLocaleString()}
-                </div>
-                <div className="text-xs text-gray-600">Processed</div>
-              </div>
-              <div className="text-center">
-                <div className="text-base sm:text-lg font-semibold text-gray-900">{dashboardData.hashRate}</div>
-                <div className="text-xs text-gray-600">Current Rate</div>
-              </div>
-              <div className="text-center">
-                <div className="text-base sm:text-lg font-semibold text-gray-900">{dashboardData.lastSuccess}</div>
-                <div className="text-xs text-gray-600">Last Success</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Passphrase Management */}
         <Card className="bg-white/80 backdrop-blur-sm border-gray-200 shadow-lg">
