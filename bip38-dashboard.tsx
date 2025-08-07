@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Activity, Database, Clock, Zap, Play, Pause, RotateCcw, Shield, Key } from 'lucide-react'
+import { Activity, Database, Clock, Zap, Play, Pause, RotateCcw, Shield, Key, BellRing } from 'lucide-react'
 import { Input } from "@/components/ui/input"
 import {
   Dialog,
@@ -24,7 +24,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Search, Plus, Trash2, Eye, EyeOff, Download, Upload, FileText, AlertCircle, CheckCircle, X, Terminal, Loader2, Edit } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Server, Monitor, Wifi, WifiOff, RefreshCw, PowerOff, BellRing } from 'lucide-react'
+import { Server, Monitor, Wifi, WifiOff, RefreshCw, PowerOff } from 'lucide-react'
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
 
@@ -409,7 +409,6 @@ export default function Component() {
     minerName: null,
   })
 
-  const [selectedAlert, setSelectedAlert] = useState<any | null>(null)
   const [showAlertDetailsDialog, setShowAlertDetailsDialog] = useState(false)
 
   // SSH operation functions
@@ -1154,11 +1153,6 @@ export default function Component() {
     }
   }
 
-  const handleAlertClick = (alert: any) => {
-    setSelectedAlert(alert)
-    setShowAlertDetailsDialog(true)
-  }
-
   // Show loading state during hydration
   if (!isMounted) {
     return (
@@ -1223,8 +1217,84 @@ export default function Component() {
             >
               {isRunning ? "RUNNING" : "PAUSED"}
             </Badge>
-            <div className="text-gray-500 text-xs sm:text-sm">
-              {currentTime ? currentTime.toLocaleTimeString() : "Loading..."}
+            <div className="flex flex-col items-end gap-1">
+              <div className="text-gray-500 text-xs sm:text-sm">
+                {currentTime ? currentTime.toLocaleTimeString() : "Loading..."}
+              </div>
+              <Dialog open={showAlertDetailsDialog} onOpenChange={setShowAlertDetailsDialog}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 text-gray-500 hover:text-red-600 hover:bg-red-50"
+                  >
+                    <BellRing className="h-4 w-4" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="bg-white border-gray-200 max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="text-gray-900 flex items-center gap-2">
+                      <BellRing className="w-5 h-5 text-red-600" />
+                      System Alerts
+                    </DialogTitle>
+                    <DialogDescription className="text-gray-600">
+                      Recent system notifications and alerts
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {dashboardData.recentAlerts.map((alert, index) => (
+                      <div
+                        key={index}
+                        className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200"
+                      >
+                        <Badge
+                          className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${
+                            alert.type === "Error"
+                              ? "bg-red-100 text-red-700 border-red-200"
+                              : alert.type === "Warning"
+                                ? "bg-yellow-100 text-yellow-700 border-yellow-200"
+                                : "bg-blue-100 text-blue-700 border-blue-200"
+                          }`}
+                        >
+                          {alert.type}
+                        </Badge>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-800 leading-tight">{alert.description}</p>
+                          <p className="text-xs text-gray-500 mt-1">{formatTimeAgo(alert.timestamp)}</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setDashboardData(prev => ({
+                              ...prev,
+                              recentAlerts: prev.recentAlerts.filter((_, i) => i !== index)
+                            }))
+                          }}
+                          className="h-6 w-6 p-0 text-gray-400 hover:text-red-600 flex-shrink-0"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                    {dashboardData.recentAlerts.length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        <BellRing className="h-12 w-12 mx-auto text-gray-300 mb-2" />
+                        <p>No recent alerts</p>
+                      </div>
+                    )}
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowAlertDetailsDialog(false)}
+                      className="bg-white border-gray-300"
+                    >
+                      Close
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </div>
@@ -1295,7 +1365,7 @@ export default function Component() {
         </Card>
 
         {/* Main Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
           {/* Miners Working */}
           <Card className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
@@ -1364,45 +1434,6 @@ export default function Component() {
               </div>
               <p className="text-xs text-gray-600 mt-1">Days remaining</p>
               <div className="mt-2 text-xs text-gray-600">At current rate</div>
-            </CardContent>
-          </Card>
-
-          {/* Recent System Alerts */}
-          <Card className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200 col-span-1 sm:col-span-2 lg:col-span-1`}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
-              <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Recent System Alerts</CardTitle>
-              <BellRing className="h-3 w-3 sm:h-4 sm:w-4 text-red-600" />
-            </CardHeader>
-            <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
-              {dashboardData.recentAlerts.length > 0 ? (
-                <div className="space-y-2">
-                  {dashboardData.recentAlerts.slice(0, 3).map((alert, index) => (
-                    <div
-                      key={index}
-                      className="flex items-start gap-2 cursor-pointer hover:bg-gray-50 p-1 -mx-1 rounded-md transition-colors"
-                      onClick={() => handleAlertClick(alert)}
-                    >
-                      <Badge
-                        className={`text-xs px-2 py-0.5 rounded-full ${
-                          alert.type === "Error"
-                            ? "bg-red-100 text-red-700 border-red-200"
-                            : alert.type === "Warning"
-                              ? "bg-yellow-100 text-yellow-700 border-yellow-200"
-                              : "bg-blue-100 text-blue-700 border-blue-200"
-                        }`}
-                      >
-                        {alert.type}
-                      </Badge>
-                      <div className="flex-1">
-                        <p className="text-xs text-gray-800 leading-tight">{alert.description}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">{formatTimeAgo(alert.timestamp)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-xs text-gray-600">No recent alerts.</div>
-              )}
             </CardContent>
           </Card>
         </div>
@@ -2581,54 +2612,6 @@ export default function Component() {
               <Button onClick={confirmDeleteMiner} className="bg-red-600 hover:bg-red-700 text-white">
                 <Trash2 className="w-4 h-4 mr-2" />
                 Remove Miner
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Alert Details Dialog */}
-        <Dialog open={showAlertDetailsDialog} onOpenChange={setShowAlertDetailsDialog}>
-          <DialogContent className="bg-white border-gray-200">
-            <DialogHeader>
-              <DialogTitle className="text-gray-900 flex items-center gap-2">
-                {selectedAlert?.type === "Error" && <BellRing className="w-5 h-5 text-red-600" />}
-                {selectedAlert?.type === "Warning" && <BellRing className="w-5 h-5 text-yellow-600" />}
-                {selectedAlert?.type === "Info" && <BellRing className="w-5 h-5 text-blue-600" />}
-                {selectedAlert?.type} Alert Details
-              </DialogTitle>
-              <DialogDescription className="text-gray-600">
-                Detailed information about the selected system alert.
-              </DialogDescription>
-            </DialogHeader>
-            {selectedAlert && (
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2">
-                  <Label className="text-gray-700 font-medium">Type:</Label>
-                  <span className="text-gray-900">{selectedAlert.type}</span>
-
-                  <Label className="text-gray-700 font-medium">Timestamp:</Label>
-                  <span className="text-gray-900">
-                    {isMounted && selectedAlert.timestamp ? (
-                      <>
-                        {selectedAlert.timestamp.toLocaleString()} ({formatTimeAgo(selectedAlert.timestamp)})
-                      </>
-                    ) : (
-                      "Loading..."
-                    )}
-                  </span>
-
-                  <Label className="text-gray-700 font-medium col-span-2">Description:</Label>
-                  <p className="text-gray-800 col-span-2">{selectedAlert.description}</p>
-                </div>
-              </div>
-            )}
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setShowAlertDetailsDialog(false)}
-                className="bg-white border-gray-300"
-              >
-                Close
               </Button>
             </DialogFooter>
           </DialogContent>
