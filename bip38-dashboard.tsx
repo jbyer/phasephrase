@@ -1226,9 +1226,11 @@ export default function Component() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 w-6 p-0 text-gray-500 hover:text-red-600 hover:bg-red-50"
+                    className={`h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 ${
+                      dashboardData.recentAlerts.length > 0 ? 'animate-shake' : ''
+                    }`}
                   >
-                    <BellRing className="h-4 w-4" />
+                    <BellRing className="h-6 w-6" />
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="bg-white border-gray-200 max-w-md">
