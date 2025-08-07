@@ -2032,15 +2032,15 @@ export default function Component() {
             </div>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="runpod" className="w-full">
+            <Tabs defaultValue="mac" className="w-full">
               <TabsList className="grid w-full grid-cols-2 bg-gray-100 border border-gray-200">
-                <TabsTrigger value="runpod" className="data-[state=active]:bg-white data-[state=active]:text-gray-900">
-                  <Server className="w-4 h-4 mr-2 text-blue-600" />
-                  Runpod Miners ({miners.runpod.length})
-                </TabsTrigger>
                 <TabsTrigger value="mac" className="data-[state=active]:bg-white data-[state=active]:text-gray-900">
                   <Monitor className="w-4 h-4 mr-2 text-purple-600" />
                   Mac Miners ({miners.mac.length})
+                </TabsTrigger>
+                <TabsTrigger value="runpod" className="data-[state=active]:bg-white data-[state=active]:text-gray-900">
+                  <Server className="w-4 h-4 mr-2 text-blue-600" />
+                  Runpod Miners ({miners.runpod.length})
                 </TabsTrigger>
               </TabsList>
 
