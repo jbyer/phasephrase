@@ -188,26 +188,7 @@ export default function Component() {
   const [filterEndDate, setFilterEndDate] = useState("")
 
   const [miners, setMiners] = useState({
-    runpod: [
-      {
-        id: "rp-001",
-        name: "Runpod-GPU-1",
-        status: "running",
-        hashRate: "850 KH/s",
-        gpu: "RTX 4090",
-        region: "US-West",
-        cost: "$0.89/hr",
-        uptime: "2h 34m",
-        temperature: "72°C",
-        sshConfig: {
-          host: "runpod-gpu-1.example.com",
-          port: 22,
-          username: "root",
-          workingDirectory: "/workspace/miner",
-          processName: "bip38_miner",
-        },
-      },
-    ],
+    runpod: [],
     mac: [
       {
         id: "mac-001",
@@ -365,6 +346,24 @@ export default function Component() {
         temperature: "35°C",
         sshConfig: {
           host: "192.168.1.108",
+          port: 22,
+          username: "admin",
+          workingDirectory: "/Users/admin/miner",
+          processName: "bip38_miner",
+        },
+      },
+      {
+        id: "mac-010",
+        name: "iMac M2",
+        status: "running",
+        hashRate: "220 KH/s",
+        cpu: "M2",
+        cores: 8,
+        memory: "24GB",
+        uptime: "3h 45m",
+        temperature: "44°C",
+        sshConfig: {
+          host: "192.168.1.109",
           port: 22,
           username: "admin",
           workingDirectory: "/Users/admin/miner",
