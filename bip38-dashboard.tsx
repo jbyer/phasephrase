@@ -82,19 +82,6 @@ interface MinerSSHConfig {
   processName: string
 }
 
-interface SSHConnectionStatus {
-  connected: boolean
-  responseTime: number
-  serverInfo?: {
-    platform?: string
-    hostname?: string
-    uptime?: string
-  }
-  error?: string
-  timestamp: string
-  testing: boolean
-}
-
 export default function Component() {
   const [isMounted, setIsMounted] = useState(false)
   const [isRunning, setIsRunning] = useState(true)
@@ -441,13 +428,6 @@ export default function Component() {
   const [realTimeActiveMiners, setRealTimeActiveMiners] = useState<number | null>(null)
   const [lastDatabaseUpdate, setLastDatabaseUpdate] = useState<string>("")
 
-  const [sshConnectionStatus, setSSHConnectionStatus] = useState<SSHConnectionStatus>({
-    connected: false,
-    responseTime: 0,
-    testing: false,
-    timestamp: new Date().toISOString(),
-  })
-
   const fetchActiveMiners = useCallback(async () => {
     try {
       const response = await fetch("/api/miners/active")
@@ -469,6 +449,11 @@ export default function Component() {
   }, [])
 
   useEffect(() => {
+    setIsMounted(true)
+    setCurrentTime(new Date())
+  }, [])
+
+  useEffect(() => {
     // Initial fetch
     fetchActiveMiners()
 
@@ -477,6 +462,36 @@ export default function Component() {
 
     return () => clearInterval(interval)
   }, [fetchActiveMiners])
+
+  // Handle real-time updates only on client side
+  useEffect(() => {
+    if (!isMounted) return
+
+    const timer = setInterval(() => {
+      setCurrentTime(new Date())
+
+      // Simulate real-time updates
+      if (isRunning) {
+        setDashboardData((prev) => ({
+          ...prev,
+          passphrasesToRun: Math.max(0, prev.passphrasesToRun - Math.floor(Math.random() * 3)),
+          hashRate: `${(2.0 + Math.random() * 1.0).toFixed(1)} MH/s`,
+        }))
+      }
+    }, 2000)
+
+    return () => clearInterval(timer)
+  }, [isRunning, isMounted])
+
+  // Auto-dismiss alerts after 5 seconds
+  useEffect(() => {
+    if (uploadAlert) {
+      const timer = setTimeout(() => {
+        setUploadAlert(null)
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [uploadAlert])
 
   // SSH operation functions
   const executeSSHOperation = async (
@@ -849,42 +864,6 @@ export default function Component() {
       icon: "text-blue-600",
     }
   }
-
-  // Handle client-side mounting
-  useEffect(() => {
-    setIsMounted(true)
-    setCurrentTime(new Date())
-  }, [])
-
-  // Handle real-time updates only on client side
-  useEffect(() => {
-    if (!isMounted) return
-
-    const timer = setInterval(() => {
-      setCurrentTime(new Date())
-
-      // Simulate real-time updates
-      if (isRunning) {
-        setDashboardData((prev) => ({
-          ...prev,
-          passphrasesToRun: Math.max(0, prev.passphrasesToRun - Math.floor(Math.random() * 3)),
-          hashRate: `${(2.0 + Math.random() * 1.0).toFixed(1)} MH/s`,
-        }))
-      }
-    }, 2000)
-
-    return () => clearInterval(timer)
-  }, [isRunning, isMounted])
-
-  // Auto-dismiss alerts after 5 seconds
-  useEffect(() => {
-    if (uploadAlert) {
-      const timer = setTimeout(() => {
-        setUploadAlert(null)
-      }, 5000)
-      return () => clearTimeout(timer)
-    }
-  }, [uploadAlert])
 
   const filteredPassphrases = passphrases.filter((p) => {
     const matchesSearch =
@@ -1273,52 +1252,6 @@ export default function Component() {
     setTimeout(fetchActiveMiners, 1000)
   }
 
-  const testSSHConnection = async () => {
-    setSSHConnectionStatus((prev) => ({ ...prev, testing: true }))
-
-    try {
-      const response = await fetch("/api/ssh-connection/test", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          host: "192.168.100.67",
-          port: 22,
-          username: "contact",
-          password: "Year20careful!",
-          timeout: 10000,
-        }),
-      })
-
-      const result = await response.json()
-
-      setSSHConnectionStatus({
-        connected: result.connected,
-        responseTime: result.responseTime,
-        serverInfo: result.serverInfo,
-        error: result.error,
-        timestamp: result.timestamp,
-        testing: false,
-      })
-    } catch (error) {
-      setSSHConnectionStatus({
-        connected: false,
-        responseTime: 0,
-        error: `Network error: ${error instanceof Error ? error.message : "Unknown error"}`,
-        timestamp: new Date().toISOString(),
-        testing: false,
-      })
-    }
-  }
-
-  useEffect(() => {
-    testSSHConnection()
-    // Test connection every 5 minutes
-    const interval = setInterval(testSSHConnection, 5 * 60 * 1000)
-    return () => clearInterval(interval)
-  }, [])
-
   return (
     <div className={`min-h-screen ${getThemeClasses(viewMode).background} p-3 sm:p-6`}>
       <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
@@ -1352,6 +1285,7 @@ export default function Component() {
             </Button>
           </Alert>
         )}
+
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -1450,6 +1384,7 @@ export default function Component() {
             </div>
           </div>
         </div>
+
         {/* View Mode Toggle */}
         <Card
           className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}
@@ -1483,6 +1418,7 @@ export default function Component() {
             </div>
           </CardContent>
         </Card>
+
         {/* Control Panel */}
         <Card className={getThemeClasses(viewMode).card}>
           <CardContent className="p-3 sm:p-4">
@@ -1517,6 +1453,7 @@ export default function Component() {
             </div>
           </CardContent>
         </Card>
+
         {/* Main Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
           {/* Miners Working */}
@@ -1607,123 +1544,7 @@ export default function Component() {
             </CardContent>
           </Card>
         </div>
-        // SSH Connection Status
-        <Card className={getThemeClasses(viewMode).card}>
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div
-                  className={`p-2 rounded-full ${
-                    sshConnectionStatus.connected ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-600"
-                  }`}
-                >
-                  {sshConnectionStatus.testing ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : sshConnectionStatus.connected ? (
-                    <Wifi className="w-4 h-4" />
-                  ) : (
-                    <WifiOff className="w-4 h-4" />
-                  )}
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 text-sm sm:text-base">SSH Server Connection</h3>
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-xs sm:text-sm text-gray-600">
-                    <span
-                      className={`font-medium ${sshConnectionStatus.connected ? "text-emerald-600" : "text-red-600"}`}
-                    >
-                      {sshConnectionStatus.testing
-                        ? "Testing..."
-                        : sshConnectionStatus.connected
-                          ? "Connected"
-                          : "Disconnected"}
-                    </span>
-                    {sshConnectionStatus.responseTime > 0 && (
-                      <span>• Response: {sshConnectionStatus.responseTime}ms</span>
-                    )}
-                    <span>• 192.168.100.67:22</span>
-                  </div>
-                  {sshConnectionStatus.error && (
-                    <p className="text-xs text-red-600 mt-1 max-w-md">{sshConnectionStatus.error}</p>
-                  )}
-                </div>
-              </div>
 
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                {sshConnectionStatus.connected && sshConnectionStatus.serverInfo && (
-                  <div className="text-xs text-gray-600 text-left sm:text-right">
-                    {sshConnectionStatus.serverInfo.hostname && (
-                      <div>Host: {sshConnectionStatus.serverInfo.hostname}</div>
-                    )}
-                    {sshConnectionStatus.serverInfo.platform && (
-                      <div>OS: {sshConnectionStatus.serverInfo.platform}</div>
-                    )}
-                    {sshConnectionStatus.serverInfo.uptime && (
-                      <div className="truncate max-w-32">{sshConnectionStatus.serverInfo.uptime.split(",")[0]}</div>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={testSSHConnection}
-                    disabled={sshConnectionStatus.testing}
-                    className="bg-white border-gray-300 hover:bg-gray-50 text-xs sm:text-sm"
-                  >
-                    {sshConnectionStatus.testing ? (
-                      <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 animate-spin" />
-                    ) : (
-                      <RefreshCw className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                    )}
-                    Test Connection
-                  </Button>
-
-                  <div className="text-xs text-gray-500">
-                    {new Date(sshConnectionStatus.timestamp).toLocaleTimeString()}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Connection Health Indicator */}
-            <div className="mt-3 pt-3 border-t border-gray-200">
-              <div className="flex items-center justify-between text-xs text-gray-600">
-                <span>Connection Health</span>
-                <div className="flex items-center gap-2">
-                  <div className="flex space-x-1">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className={`w-2 h-2 rounded-full ${
-                          sshConnectionStatus.connected
-                            ? i <
-                              (sshConnectionStatus.responseTime < 100
-                                ? 5
-                                : sshConnectionStatus.responseTime < 500
-                                  ? 3
-                                  : 1)
-                              ? "bg-emerald-500"
-                              : "bg-gray-300"
-                            : "bg-red-500"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <span className="ml-2">
-                    {sshConnectionStatus.connected
-                      ? sshConnectionStatus.responseTime < 100
-                        ? "Excellent"
-                        : sshConnectionStatus.responseTime < 500
-                          ? "Good"
-                          : "Slow"
-                      : "Failed"}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
         {/* Passphrase Management */}
         <Card className={getThemeClasses(viewMode).card}>
           <CardHeader>
@@ -2151,6 +1972,7 @@ export default function Component() {
             )}
           </CardContent>
         </Card>
+
         {/* Miner Management */}
         <Card className={getThemeClasses(viewMode).card}>
           <CardHeader>
@@ -2582,437 +2404,7 @@ export default function Component() {
             </Tabs>
           </CardContent>
         </Card>
-        {/* Edit Miner Dialog */}
-        <Card className={getThemeClasses(viewMode).card}>
-          <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <CardTitle className="text-lg sm:text-xl text-gray-900">Miner Management</CardTitle>
-                <CardDescription className="text-sm text-gray-600">
-                  Control and monitor your Runpod and Mac miners via SSH
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                <Dialog open={showAddMinerDialog} onOpenChange={setShowAddMinerDialog}>
-                  <DialogTrigger asChild>
-                    <Button className={`flex items-center gap-2 ${getThemeClasses(viewMode).button} shadow-md`}>
-                      <Plus className="w-4 h-4" />
-                      Add Miner
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="bg-white border-gray-200">
-                    <DialogHeader>
-                      <DialogTitle className="text-gray-900">Add New Miner</DialogTitle>
-                      <DialogDescription className="text-gray-600">
-                        Add a new Runpod or Mac miner to your fleet
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="miner-type" className="text-gray-700">
-                          Miner Type
-                        </Label>
-                        <Select value={newMinerType} onValueChange={setNewMinerType}>
-                          <SelectTrigger className="bg-white border-gray-300 text-gray-900">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-white border-gray-200">
-                            <SelectItem value="runpod">Runpod GPU</SelectItem>
-                            <SelectItem value="mac">Mac Computer</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="miner-name" className="text-gray-700">
-                          Miner Name
-                        </Label>
-                        <Input
-                          id="miner-name"
-                          value={newMinerConfig.name}
-                          onChange={(e) => setNewMinerConfig((prev) => ({ ...prev, name: e.target.value }))}
-                          placeholder="Enter miner name..."
-                          className="bg-white border-gray-300 text-gray-900"
-                        />
-                      </div>
-                      {newMinerType === "runpod" ? (
-                        <>
-                          <div className="grid gap-2">
-                            <Label htmlFor="gpu" className="text-gray-700">
-                              GPU Model
-                            </Label>
-                            <Select
-                              value={newMinerConfig.gpu}
-                              onValueChange={(value) => setNewMinerConfig((prev) => ({ ...prev, gpu: value }))}
-                            >
-                              <SelectTrigger className="bg-white border-gray-300 text-gray-900">
-                                <SelectValue placeholder="Select GPU" />
-                              </SelectTrigger>
-                              <SelectContent className="bg-white border-gray-200">
-                                <SelectItem value="RTX 4090">RTX 4090</SelectItem>
-                                <SelectItem value="RTX 4080">RTX 4080</SelectItem>
-                                <SelectItem value="RTX 3090">RTX 3090</SelectItem>
-                                <SelectItem value="RTX 3080">RTX 3080</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="grid gap-2">
-                            <Label htmlFor="region" className="text-gray-700">
-                              Region
-                            </Label>
-                            <Select
-                              value={newMinerConfig.region}
-                              onValueChange={(value) => setNewMinerConfig((prev) => ({ ...prev, region: value }))}
-                            >
-                              <SelectTrigger className="bg-white border-gray-300 text-gray-900">
-                                <SelectValue placeholder="Select region" />
-                              </SelectTrigger>
-                              <SelectContent className="bg-white border-gray-200">
-                                <SelectItem value="US-West">US West</SelectItem>
-                                <SelectItem value="US-East">US East</SelectItem>
-                                <SelectItem value="EU-Central">EU Central</SelectItem>
-                                <SelectItem value="Asia-Pacific">Asia Pacific</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="grid gap-2">
-                            <Label htmlFor="cpu" className="text-gray-700">
-                              CPU Model
-                            </Label>
-                            <Select
-                              value={newMinerConfig.cpu}
-                              onValueChange={(value) => setNewMinerConfig((prev) => ({ ...prev, cpu: value }))}
-                            >
-                              <SelectTrigger className="bg-white border-gray-300 text-gray-900">
-                                <SelectValue placeholder="Select CPU" />
-                              </SelectTrigger>
-                              <SelectContent className="bg-white border-gray-200">
-                                <SelectItem value="M3 Pro">M3 Pro</SelectItem>
-                                <SelectItem value="M3 Max">M3 Max</SelectItem>
-                                <SelectItem value="M2 Ultra">M2 Ultra</SelectItem>
-                                <SelectItem value="M2 Pro">M2 Pro</SelectItem>
-                                <SelectItem value="M1">M1</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="grid gap-2">
-                              <Label htmlFor="cores" className="text-gray-700">
-                                CPU Cores
-                              </Label>
-                              <Input
-                                id="cores"
-                                type="number"
-                                value={newMinerConfig.cores}
-                                onChange={(e) => setNewMinerConfig((prev) => ({ ...prev, cores: e.target.value }))}
-                                placeholder="8"
-                                className="bg-white border-gray-300 text-gray-900"
-                              />
-                            </div>
-                            <div className="grid gap-2">
-                              <Label htmlFor="memory" className="text-gray-700">
-                                Memory
-                              </Label>
-                              <Input
-                                id="memory"
-                                value={newMinerConfig.memory}
-                                onChange={(e) => setNewMinerConfig((prev) => ({ ...prev, memory: e.target.value }))}
-                                placeholder="16GB"
-                                className="bg-white border-gray-300 text-gray-900"
-                              />
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => setShowAddMinerDialog(false)}
-                        className="bg-white border-gray-300"
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={handleAddMiner}
-                        disabled={!newMinerConfig.name.trim()}
-                        className={getThemeClasses(viewMode).button}
-                      >
-                        Add Miner
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="mac" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 bg-gray-100 border border-gray-200">
-                <TabsTrigger value="mac" className="data-[state=active]:bg-white data-[state=active]:text-gray-900">
-                  <Monitor className="w-4 h-4 mr-2 text-purple-600" />
-                  Mac Miners ({miners.mac.length})
-                </TabsTrigger>
-                <TabsTrigger value="runpod" className="data-[state=active]:bg-white data-[state=active]:text-gray-900">
-                  <Server className="w-4 h-4 mr-2 text-blue-600" />
-                  Runpod Miners ({miners.runpod.length})
-                </TabsTrigger>
-              </TabsList>
 
-              <TabsContent value="runpod" className="space-y-4">
-                <div className="grid gap-4">
-                  {miners.runpod.map((miner) => (
-                    <Card key={miner.id} className="bg-white border-gray-200 shadow-sm">
-                      <CardContent className="p-3 sm:p-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-                          <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <Server className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />
-                              <div className="min-w-0 flex-1">
-                                <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
-                                  {miner.name}
-                                </h3>
-                                <p className="text-xs sm:text-sm text-gray-600 truncate">
-                                  {miner.gpu} • {miner.region}
-                                </p>
-                              </div>
-                            </div>
-                            <Badge className={`${getMinerStatusBadge(miner.status)} border text-xs flex-shrink-0`}>
-                              {miner.status}
-                            </Badge>
-                          </div>
-                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-                            <div className="text-left sm:text-right">
-                              <div className="text-sm font-medium text-gray-900">{miner.hashRate}</div>
-                              <div className="text-xs text-gray-600">{miner.cost}</div>
-                            </div>
-                            <div className="flex items-center justify-center gap-2 flex-wrap">
-                              {/* SSH Operation Buttons */}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleSSHOperation(miner.id, "runpod", "continue")}
-                                disabled={isOperationInProgress(miner.id, "continue")}
-                                className={`bg-white ${getOperationColor("continue")} p-1.5`}
-                                title="Continue Miner"
-                              >
-                                {isOperationInProgress(miner.id, "continue") ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  getOperationIcon("continue")
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleSSHOperation(miner.id, "runpod", "refresh")}
-                                disabled={isOperationInProgress(miner.id, "refresh")}
-                                className={`bg-white ${getOperationColor("refresh")} p-1.5`}
-                                title="Refresh Miner"
-                              >
-                                {isOperationInProgress(miner.id, "refresh") ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  getOperationIcon("refresh")
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleSSHOperation(miner.id, "runpod", "stop")}
-                                disabled={isOperationInProgress(miner.id, "stop")}
-                                className={`bg-white ${getOperationColor("stop")} p-1.5`}
-                                title="Stop Miner"
-                              >
-                                {isOperationInProgress(miner.id, "stop") ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  getOperationIcon("stop")
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openSSHConfig(miner.id, "runpod")}
-                                className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 p-1.5"
-                                title="SSH Config"
-                              >
-                                <Terminal className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openEditMiner("runpod", miner.id)}
-                                className="bg-white border-blue-300 text-blue-700 hover:bg-blue-50 p-1.5"
-                                title="Edit Miner"
-                              >
-                                <Edit className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => triggerDeleteMiner("runpod", miner.id)}
-                                className="bg-white border-red-300 text-red-700 hover:bg-red-50 p-1.5"
-                                title="Remove Miner"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 sm:gap-4 mt-3 pt-3 border-t border-gray-200">
-                          <div className="text-center">
-                            <div className="text-xs sm:text-sm font-medium text-gray-900">{miner.uptime}</div>
-                            <div className="text-xs text-gray-600">Uptime</div>
-                          </div>
-                          <div className="text-center">
-                            <div
-                              className={`text-xs sm:text-sm font-medium ${miner.status === "running" ? "text-emerald-600" : "text-red-600"}`}
-                            >
-                              {miner.status === "running" ? (
-                                <Wifi className="w-3 h-3 sm:w-4 sm:h-4 mx-auto" />
-                              ) : (
-                                <WifiOff className="w-3 h-3 sm:w-4 sm:h-4 mx-auto" />
-                              )}
-                            </div>
-                            <div className="text-xs text-gray-600">Connection</div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="mac" className="space-y-4">
-                <div className="grid gap-4">
-                  {miners.mac.map((miner) => (
-                    <Card key={miner.id} className="bg-white border-gray-200 shadow-sm">
-                      <CardContent className="p-3 sm:p-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-                          <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <Monitor className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 flex-shrink-0" />
-                              <div className="min-w-0 flex-1">
-                                <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
-                                  {miner.name}
-                                </h3>
-                                <p className="text-xs sm:text-sm text-gray-600 truncate">
-                                  {miner.cpu} • {miner.cores} cores • {miner.memory}
-                                </p>
-                              </div>
-                            </div>
-                            <Badge className={`${getMinerStatusBadge(miner.status)} border text-xs flex-shrink-0`}>
-                              {miner.status}
-                            </Badge>
-                          </div>
-                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-                            <div className="text-left sm:text-right">
-                              <div className="text-sm font-medium text-gray-900">{miner.hashRate}</div>
-                              <div className="text-xs text-gray-600">Hash Rate</div>
-                            </div>
-                            <div className="flex items-center justify-center gap-2 flex-wrap">
-                              {/* SSH Operation Buttons */}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleSSHOperation(miner.id, "mac", "continue")}
-                                disabled={isOperationInProgress(miner.id, "continue")}
-                                className={`bg-white ${getOperationColor("continue")} p-1.5`}
-                                title="Continue Miner"
-                              >
-                                {isOperationInProgress(miner.id, "continue") ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  getOperationIcon("continue")
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleSSHOperation(miner.id, "mac", "refresh")}
-                                disabled={isOperationInProgress(miner.id, "refresh")}
-                                className={`bg-white ${getOperationColor("refresh")} p-1.5`}
-                                title="Refresh Miner"
-                              >
-                                {isOperationInProgress(miner.id, "refresh") ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  getOperationIcon("refresh")
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleSSHOperation(miner.id, "mac", "stop")}
-                                disabled={isOperationInProgress(miner.id, "stop")}
-                                className={`bg-white ${getOperationColor("stop")} p-1.5`}
-                                title="Stop Miner"
-                              >
-                                {isOperationInProgress(miner.id, "stop") ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  getOperationIcon("stop")
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openSSHConfig(miner.id, "mac")}
-                                className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 p-1.5"
-                                title="SSH Config"
-                              >
-                                <Terminal className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openEditMiner("mac", miner.id)}
-                                className="bg-white border-blue-300 text-blue-700 hover:bg-blue-50 p-1.5"
-                                title="Edit Miner"
-                              >
-                                <Edit className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => triggerDeleteMiner("mac", miner.id)}
-                                className="bg-white border-red-300 text-red-700 hover:bg-red-50 p-1.5"
-                                title="Remove Miner"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 sm:gap-4 mt-3 pt-3 border-t border-gray-200">
-                          <div className="text-center">
-                            <div className="text-xs sm:text-sm font-medium text-gray-900">{miner.uptime}</div>
-                            <div className="text-xs text-gray-600">Uptime</div>
-                          </div>
-                          <div className="text-center">
-                            <div
-                              className={`text-xs sm:text-sm font-medium ${miner.status === "running" ? "text-emerald-600" : "text-red-600"}`}
-                            >
-                              {miner.status === "running" ? (
-                                <Wifi className="w-3 h-3 sm:w-4 sm:h-4 mx-auto" />
-                              ) : (
-                                <WifiOff className="w-3 h-3 sm:w-4 sm:h-4 mx-auto" />
-                              )}
-                            </div>
-                            <div className="text-xs text-gray-600">Connection</div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
         {/* Edit Miner Dialog */}
         <Dialog open={showEditMinerDialog} onOpenChange={setShowEditMinerDialog}>
           <DialogContent className="bg-white border-gray-200">
@@ -3146,6 +2538,7 @@ export default function Component() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
         {/* SSH Configuration Dialog */}
         <Dialog open={showSSHConfigDialog} onOpenChange={setShowSSHConfigDialog}>
           <DialogContent className="bg-white border-gray-200 max-w-2xl">
@@ -3290,6 +2683,7 @@ export default function Component() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
         {/* Delete Confirmation Dialog */}
         <Dialog
           open={deleteConfirmDialog.show}
