@@ -48,6 +48,8 @@
     "next-themes": "latest",
     "node-ssh": "latest",
     "path": "latest",
+    "pg": "latest",
+    "pg-native": "latest",
     "react": "^18",
     "react-day-picker": "latest",
     "react-dom": "^18",

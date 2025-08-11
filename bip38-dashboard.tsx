@@ -2,12 +2,12 @@
 
 import type React from "react"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Activity, Database, Clock, Zap, Play, Pause, RotateCcw, Shield, Key, BellRing } from 'lucide-react'
+import { Activity, Database, Clock, Zap, Play, Pause, RotateCcw, Shield, Key, BellRing } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import {
   Dialog,
@@ -21,10 +21,25 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Plus, Trash2, Eye, EyeOff, Download, Upload, FileText, AlertCircle, CheckCircle, X, Terminal, Loader2, Edit } from 'lucide-react'
+import {
+  Search,
+  Plus,
+  Trash2,
+  Eye,
+  EyeOff,
+  Download,
+  Upload,
+  FileText,
+  AlertCircle,
+  CheckCircle,
+  X,
+  Terminal,
+  Loader2,
+  Edit,
+} from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Server, Monitor, Wifi, WifiOff, RefreshCw, PowerOff } from 'lucide-react'
+import { Server, Monitor, Wifi, WifiOff, RefreshCw, PowerOff } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
 
@@ -393,7 +408,7 @@ export default function Component() {
     cpu: "",
     cores: "",
     memory: "",
-    type: "runpod" as "runpod" | "mac"
+    type: "runpod" as "runpod" | "mac",
   })
 
   const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<{
@@ -409,6 +424,39 @@ export default function Component() {
   })
 
   const [showAlertDetailsDialog, setShowAlertDetailsDialog] = useState(false)
+
+  const [realTimeActiveMiners, setRealTimeActiveMiners] = useState<number | null>(null)
+  const [lastDatabaseUpdate, setLastDatabaseUpdate] = useState<string>("")
+
+  const fetchActiveMiners = useCallback(async () => {
+    try {
+      const response = await fetch("/api/miners/active")
+      if (response.ok) {
+        const data = await response.json()
+        setRealTimeActiveMiners(data.activeCount)
+        setLastDatabaseUpdate(data.lastUpdated)
+
+        // Update dashboard data with real count
+        setDashboardData((prev) => ({
+          ...prev,
+          minersWorking: data.activeCount,
+        }))
+      }
+    } catch (error) {
+      console.error("Failed to fetch active miners:", error)
+      // Keep using local state as fallback
+    }
+  }, [])
+
+  useEffect(() => {
+    // Initial fetch
+    fetchActiveMiners()
+
+    // Set up interval for periodic updates (every 30 seconds)
+    const interval = setInterval(fetchActiveMiners, 30000)
+
+    return () => clearInterval(interval)
+  }, [fetchActiveMiners])
 
   // SSH operation functions
   const executeSSHOperation = async (
@@ -767,7 +815,7 @@ export default function Component() {
         buttonOutline: "bg-white border-orange-300 hover:bg-orange-50",
         badge: "bg-orange-100 text-orange-800 border-orange-200",
         accent: "text-orange-600",
-        icon: "text-orange-600"
+        icon: "text-orange-600",
       }
     }
     return {
@@ -778,7 +826,7 @@ export default function Component() {
       buttonOutline: "bg-white border-gray-300 hover:bg-gray-50",
       badge: "bg-blue-100 text-blue-800 border-blue-200",
       accent: "text-blue-600",
-      icon: "text-blue-600"
+      icon: "text-blue-600",
     }
   }
 
@@ -1034,7 +1082,7 @@ export default function Component() {
         cpu: "",
         cores: "",
         memory: "",
-        type: "runpod"
+        type: "runpod",
       })
       setShowEditMinerDialog(false)
     }
@@ -1052,7 +1100,7 @@ export default function Component() {
           cpu: "",
           cores: "",
           memory: "",
-          type: "runpod"
+          type: "runpod",
         })
       } else {
         setEditMinerConfig({
@@ -1063,14 +1111,14 @@ export default function Component() {
           cpu: miner.cpu,
           cores: miner.cores.toString(),
           memory: miner.memory,
-          type: "mac"
+          type: "mac",
         })
       }
       setShowEditMinerDialog(true)
     }
   }
 
-  const handleDeleteMiner = (type: "runpod" | "mac", minerId: string) => {
+  const triggerDeleteMiner = (type: "runpod" | "mac", minerId: string) => {
     const miner = miners[type].find((m) => m.id === minerId)
     setDeleteConfirmDialog({
       show: true,
@@ -1165,6 +1213,46 @@ export default function Component() {
     )
   }
 
+  const updateMinerStatus = async (minerId: string, minerType: "runpod" | "mac", newStatus: string) => {
+    setMiners((prev) => ({
+      ...prev,
+      [minerType]: prev[minerType].map((miner) => {
+        if (miner.id === minerId) {
+          return { ...miner, status: newStatus }
+        }
+        return miner
+      }),
+    }))
+
+    setTimeout(fetchActiveMiners, 1000) // Small delay to ensure database is updated
+  }
+
+  const deleteMiner = () => {
+    if (deleteConfirmDialog.minerType && deleteConfirmDialog.minerId) {
+      setMiners((prev) => ({
+        ...prev,
+        [deleteConfirmDialog.minerType!]: prev[deleteConfirmDialog.minerType!].filter(
+          (miner) => miner.id !== deleteConfirmDialog.minerId,
+        ),
+      }))
+
+      // Update active miners count
+      const totalRunning = [...miners.runpod, ...miners.mac].filter(
+        (m) => m.status === "running" && m.id !== deleteConfirmDialog.minerId,
+      ).length
+      setDashboardData((prev) => ({ ...prev, minersWorking: totalRunning }))
+    }
+
+    setDeleteConfirmDialog({
+      show: false,
+      minerType: null,
+      minerId: null,
+      minerName: null,
+    })
+
+    setTimeout(fetchActiveMiners, 1000)
+  }
+
   return (
     <div className={`min-h-screen ${getThemeClasses(viewMode).background} p-3 sm:p-6`}>
       <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
@@ -1211,9 +1299,7 @@ export default function Component() {
             </p>
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
-            <Badge
-              className={`px-2 sm:px-3 py-1 ${getThemeClasses(viewMode).badge} text-xs sm:text-sm`}
-            >
+            <Badge className={`px-2 sm:px-3 py-1 ${getThemeClasses(viewMode).badge} text-xs sm:text-sm`}>
               {isRunning ? "RUNNING" : "PAUSED"}
             </Badge>
             <div className="flex flex-col items-end gap-1">
@@ -1226,7 +1312,7 @@ export default function Component() {
                     variant="ghost"
                     size="sm"
                     className={`h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 ${
-                      dashboardData.recentAlerts.length > 0 ? 'animate-shake' : ''
+                      dashboardData.recentAlerts.length > 0 ? "animate-shake" : ""
                     }`}
                   >
                     <BellRing className="h-6 w-6" />
@@ -1267,9 +1353,9 @@ export default function Component() {
                           variant="ghost"
                           size="sm"
                           onClick={() => {
-                            setDashboardData(prev => ({
+                            setDashboardData((prev) => ({
                               ...prev,
-                              recentAlerts: prev.recentAlerts.filter((_, i) => i !== index)
+                              recentAlerts: prev.recentAlerts.filter((_, i) => i !== index),
                             }))
                           }}
                           className="h-6 w-6 p-0 text-gray-400 hover:text-red-600 flex-shrink-0"
@@ -1301,12 +1387,16 @@ export default function Component() {
         </div>
 
         {/* View Mode Toggle */}
-        <Card className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}>
+        <Card
+          className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}
+        >
           <CardContent className="p-3 sm:p-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${viewMode === "live" ? "bg-green-500 animate-pulse" : "bg-orange-500"}`}></div>
+                  <div
+                    className={`w-3 h-3 rounded-full ${viewMode === "live" ? "bg-green-500 animate-pulse" : "bg-orange-500"}`}
+                  ></div>
                   <span className="text-sm font-medium text-gray-900">
                     {viewMode === "live" ? "LIVE MODE" : "TEST MODE"}
                   </span>
@@ -1368,17 +1458,28 @@ export default function Component() {
         {/* Main Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
           {/* Miners Working */}
-          <Card className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}>
+          <Card
+            className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Active Miners</CardTitle>
               <Activity className="h-3 w-3 sm:h-4 sm:w-4 text-emerald-600" />
             </CardHeader>
             <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
-              <div className="text-xl sm:text-2xl font-bold text-gray-900">{dashboardData.minersWorking}</div>
+              <div className="text-xl sm:text-2xl font-bold text-gray-900">
+                {realTimeActiveMiners !== null ? realTimeActiveMiners : dashboardData.minersWorking}
+              </div>
               <p className="text-xs text-gray-600 mt-1">Currently processing</p>
+              {lastDatabaseUpdate && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Last updated: {new Date(lastDatabaseUpdate).toLocaleTimeString()}
+                </p>
+              )}
               <div className="flex items-center mt-2">
                 <div className="flex space-x-1">
-                  {Array.from({ length: dashboardData.minersWorking }).map((_, i) => (
+                  {Array.from({
+                    length: realTimeActiveMiners !== null ? realTimeActiveMiners : dashboardData.minersWorking,
+                  }).map((_, i) => (
                     <div
                       key={i}
                       className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"
@@ -1391,7 +1492,9 @@ export default function Component() {
           </Card>
 
           {/* Passphrases Remaining */}
-          <Card className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}>
+          <Card
+            className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Passphrases Remaining</CardTitle>
               <Zap className="h-3 w-3 sm:h-4 sm:w-4 text-amber-600" />
@@ -1407,7 +1510,9 @@ export default function Component() {
           </Card>
 
           {/* Total Database */}
-          <Card className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}>
+          <Card
+            className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Total Database</CardTitle>
               <Database className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
@@ -1424,7 +1529,9 @@ export default function Component() {
           </Card>
 
           {/* Days Remaining */}
-          <Card className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}>
+          <Card
+            className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Estimated Time</CardTitle>
               <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-purple-600" />
@@ -1465,7 +1572,9 @@ export default function Component() {
                 </Button>
                 <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
                   <DialogTrigger asChild>
-                    <Button className={`flex items-center gap-1 sm:gap-2 ${getThemeClasses(viewMode).button} shadow-md text-xs sm:text-sm`}>
+                    <Button
+                      className={`flex items-center gap-1 sm:gap-2 ${getThemeClasses(viewMode).button} shadow-md text-xs sm:text-sm`}
+                    >
                       <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
                       Add Passphrase
                     </Button>
@@ -2136,7 +2245,7 @@ export default function Component() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleDeleteMiner("runpod", miner.id)}
+                                onClick={() => triggerDeleteMiner("runpod", miner.id)}
                                 className="bg-white border-red-300 text-red-700 hover:bg-red-50 p-1.5"
                                 title="Remove Miner"
                               >
@@ -2261,7 +2370,7 @@ export default function Component() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => handleDeleteMiner("mac", miner.id)}
+                                onClick={() => triggerDeleteMiner("mac", miner.id)}
                                 className="bg-white border-red-300 text-red-700 hover:bg-red-50 p-1.5"
                                 title="Remove Miner"
                               >
@@ -2610,7 +2719,7 @@ export default function Component() {
               >
                 Cancel
               </Button>
-              <Button onClick={confirmDeleteMiner} className="bg-red-600 hover:bg-red-700 text-white">
+              <Button onClick={deleteMiner} className="bg-red-600 hover:bg-red-700 text-white">
                 <Trash2 className="w-4 h-4 mr-2" />
                 Remove Miner
               </Button>
