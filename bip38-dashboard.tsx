@@ -428,6 +428,8 @@ export default function Component() {
   const [realTimeActiveMiners, setRealTimeActiveMiners] = useState<number | null>(null)
   const [lastDatabaseUpdate, setLastDatabaseUpdate] = useState<string>("")
 
+  const [showClearDialog, setShowClearDialog] = useState(false)
+
   const fetchActiveMiners = useCallback(async () => {
     try {
       const response = await fetch("/api/miners/active")
@@ -881,6 +883,16 @@ export default function Component() {
 
     return matchesSearch && matchesStatus && matchesPriority && matchesDate
   })
+
+  const handleClearAllPassphrases = () => {
+    setPassphrases([])
+    setDashboardData((prev) => ({
+      ...prev,
+      totalPassphrases: 0,
+      passphrasesToRun: 0,
+    }))
+    setShowClearDialog(false)
+  }
 
   const handleAddPassphrase = () => {
     if (newPassphrase.trim()) {
@@ -1555,6 +1567,7 @@ export default function Component() {
                   Search, add, and manage your passphrase database
                 </CardDescription>
               </div>
+
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
@@ -1569,6 +1582,42 @@ export default function Component() {
                   )}
                   {showPassphrases ? "Hide" : "Show"} Passphrases
                 </Button>
+
+                <Dialog open={showClearDialog} onOpenChange={setShowClearDialog}>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={passphrases.length === 0}
+                      className="bg-white border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 text-xs sm:text-sm"
+                    >
+                      <Trash2 className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                      Clear All
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-white border-gray-200">
+                    <DialogHeader>
+                      <DialogTitle className="text-gray-900">Clear All Passphrases</DialogTitle>
+                      <DialogDescription className="text-gray-600">
+                        Are you sure you want to clear all passphrases? This action cannot be undone and will remove all{" "}
+                        {passphrases.length} passphrases from the list.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowClearDialog(false)}
+                        className="bg-white border-gray-300"
+                      >
+                        Cancel
+                      </Button>
+                      <Button onClick={handleClearAllPassphrases} className="bg-red-600 hover:bg-red-700 text-white">
+                        Clear All Passphrases
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
                 <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
                   <DialogTrigger asChild>
                     <Button
