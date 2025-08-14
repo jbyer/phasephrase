@@ -82,6 +82,20 @@ interface MinerSSHConfig {
   processName: string
 }
 
+// LLM configuration interface
+interface LLMConfig {
+  provider: "openai" | "azure"
+  apiKey: string
+  model: string
+  temperature: number
+  minWords: number
+  maxWords: number
+  phrasesPerRow: number
+  azureEndpoint: string
+  azureDeployment: string
+  azureApiVersion: string
+}
+
 export default function Component() {
   const [isMounted, setIsMounted] = useState(false)
   const [isRunning, setIsRunning] = useState(true)
@@ -430,6 +444,21 @@ export default function Component() {
 
   const [showClearDialog, setShowClearDialog] = useState(false)
 
+  const [llmConfig, setLLMConfig] = useState<LLMConfig>({
+    provider: "openai" as "openai" | "azure",
+    apiKey: "",
+    model: "gpt-3.5-turbo",
+    temperature: 0.7,
+    minWords: 3,
+    maxWords: 8,
+    phrasesPerRow: 3,
+    azureEndpoint: "",
+    azureDeployment: "",
+    azureApiVersion: "2024-02-15-preview",
+  })
+  const [generateVariations, setGenerateVariations] = useState(false)
+  const [showLLMConfig, setShowLLMConfig] = useState(false)
+
   const fetchActiveMiners = useCallback(async () => {
     try {
       const response = await fetch("/api/miners/active")
@@ -702,7 +731,7 @@ export default function Component() {
     return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
   }
 
-  const simulateFileUpload = async (file: File): Promise<void> => {
+  const handleFileUpload = async (file: File): Promise<void> => {
     const fileId = generateFileId()
 
     // Create uploaded file record
@@ -717,7 +746,7 @@ export default function Component() {
 
     setUploadedFiles((prev) => [...prev, uploadedFile])
 
-    // Simulate upload progress
+    // Create progress tracking
     const progressUpdate: FileUploadProgress = {
       fileId,
       progress: 0,
@@ -727,44 +756,75 @@ export default function Component() {
     setUploadProgress((prev) => [...prev, progressUpdate])
 
     try {
+      // Create form data with LLM configuration
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("generateVariations", generateVariations.toString())
+
+      if (generateVariations) {
+        formData.append("llmProvider", llmConfig.provider)
+        formData.append("apiKey", llmConfig.apiKey)
+        formData.append("model", llmConfig.model)
+        formData.append("temperature", llmConfig.temperature.toString())
+        formData.append("minWords", llmConfig.minWords.toString())
+        formData.append("maxWords", llmConfig.maxWords.toString())
+        formData.append("phrasesPerRow", llmConfig.phrasesPerRow.toString())
+
+        if (llmConfig.provider === "azure") {
+          formData.append("azureEndpoint", llmConfig.azureEndpoint)
+          formData.append("azureDeployment", llmConfig.azureDeployment)
+          formData.append("azureApiVersion", llmConfig.azureApiVersion)
+        }
+      }
+
       // Simulate upload progress
-      for (let progress = 0; progress <= 100; progress += 10) {
-        await new Promise((resolve) => setTimeout(resolve, 200))
+      for (let progress = 0; progress <= 90; progress += 15) {
+        await new Promise((resolve) => setTimeout(resolve, 300))
         setUploadProgress((prev) => prev.map((p) => (p.fileId === fileId ? { ...p, progress } : p)))
       }
 
-      // Simulate file processing
-      setUploadProgress((prev) => prev.map((p) => (p.fileId === fileId ? { ...p, status: "processing" } : p)))
+      // Make actual API call
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      })
 
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const result = await response.json()
 
-      // Simulate successful completion
-      const processedCount = Math.floor(Math.random() * 1000) + 100
+      if (!response.ok) {
+        throw new Error(result.error || "Upload failed")
+      }
 
+      // Complete progress
+      setUploadProgress((prev) =>
+        prev.map((p) => (p.fileId === fileId ? { ...p, progress: 100, status: "complete" } : p)),
+      )
+
+      // Update uploaded file record
       setUploadedFiles((prev) =>
         prev.map((f) =>
           f.id === fileId
             ? {
                 ...f,
                 status: "success",
-                processedCount,
+                processedCount: result.processedCount,
               }
             : f,
         ),
       )
 
-      setUploadProgress((prev) => prev.map((p) => (p.fileId === fileId ? { ...p, status: "complete" } : p)))
-
       // Update dashboard data
       setDashboardData((prev) => ({
         ...prev,
-        totalPassphrases: prev.totalPassphrases + processedCount,
-        passphrasesToRun: prev.passphrasesToRun + processedCount,
+        totalPassphrases: prev.totalPassphrases + result.processedCount,
+        passphrasesToRun: prev.passphrasesToRun + result.processedCount,
       }))
 
       setUploadAlert({
         type: "success",
-        message: `Successfully uploaded and processed ${file.name}. Added ${processedCount} passphrases.`,
+        message: result.variationsGenerated
+          ? `Successfully uploaded ${file.name} and generated ${result.processedCount} phrase variations using ${llmConfig.provider.toUpperCase()}.`
+          : `Successfully uploaded and processed ${file.name}. Added ${result.processedCount} passphrases.`,
       })
     } catch (error) {
       setUploadedFiles((prev) =>
@@ -773,7 +833,7 @@ export default function Component() {
             ? {
                 ...f,
                 status: "error",
-                errorMessage: "Upload failed. Please try again.",
+                errorMessage: error instanceof Error ? error.message : "Upload failed. Please try again.",
               }
             : f,
         ),
@@ -783,7 +843,7 @@ export default function Component() {
 
       setUploadAlert({
         type: "error",
-        message: `Failed to upload ${file.name}. Please try again.`,
+        message: `Failed to upload ${file.name}. ${error instanceof Error ? error.message : "Please try again."}`,
       })
     }
 
@@ -807,7 +867,7 @@ export default function Component() {
       return
     }
 
-    await simulateFileUpload(file)
+    await handleFileUpload(file)
   }
 
   const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1714,7 +1774,170 @@ export default function Component() {
                         Upload CSV, TXT, or Excel files containing passphrases to add to your database
                       </DialogDescription>
                     </DialogHeader>
+
                     <div className="space-y-4">
+                      {/* LLM Generation Toggle */}
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id="generateVariations"
+                              checked={generateVariations}
+                              onChange={(e) => setGenerateVariations(e.target.checked)}
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <label htmlFor="generateVariations" className="font-medium text-blue-900">
+                              Generate AI Phrase Variations
+                            </label>
+                          </div>
+                          {generateVariations && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShowLLMConfig(!showLLMConfig)}
+                              className="text-xs"
+                            >
+                              {showLLMConfig ? "Hide" : "Show"} Config
+                            </Button>
+                          )}
+                        </div>
+
+                        {generateVariations && (
+                          <p className="text-sm text-blue-800 mb-3">
+                            Use AI to generate multiple variations of each passphrase in your file. This will create
+                            additional passphrases with similar meanings but different wording.
+                          </p>
+                        )}
+
+                        {/* LLM Configuration Panel */}
+                        {generateVariations && showLLMConfig && (
+                          <div className="space-y-4 border-t border-blue-200 pt-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-blue-900 mb-1">Provider</label>
+                                <select
+                                  value={llmConfig.provider}
+                                  onChange={(e) =>
+                                    setLLMConfig((prev) => ({
+                                      ...prev,
+                                      provider: e.target.value as "openai" | "azure",
+                                    }))
+                                  }
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                >
+                                  <option value="openai">OpenAI</option>
+                                  <option value="azure">Azure OpenAI</option>
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-blue-900 mb-1">API Key</label>
+                                <input
+                                  type="password"
+                                  value={llmConfig.apiKey}
+                                  onChange={(e) => setLLMConfig((prev) => ({ ...prev, apiKey: e.target.value }))}
+                                  placeholder="Enter your API key"
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-blue-900 mb-1">Model</label>
+                                <input
+                                  type="text"
+                                  value={llmConfig.model}
+                                  onChange={(e) => setLLMConfig((prev) => ({ ...prev, model: e.target.value }))}
+                                  placeholder="gpt-3.5-turbo"
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-blue-900 mb-1">
+                                  Variations per Phrase
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="10"
+                                  value={llmConfig.phrasesPerRow}
+                                  onChange={(e) =>
+                                    setLLMConfig((prev) => ({
+                                      ...prev,
+                                      phrasesPerRow: Number.parseInt(e.target.value),
+                                    }))
+                                  }
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-blue-900 mb-1">Min Words</label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="20"
+                                  value={llmConfig.minWords}
+                                  onChange={(e) =>
+                                    setLLMConfig((prev) => ({ ...prev, minWords: Number.parseInt(e.target.value) }))
+                                  }
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-sm font-medium text-blue-900 mb-1">Max Words</label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="20"
+                                  value={llmConfig.maxWords}
+                                  onChange={(e) =>
+                                    setLLMConfig((prev) => ({ ...prev, maxWords: Number.parseInt(e.target.value) }))
+                                  }
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                />
+                              </div>
+
+                              {llmConfig.provider === "azure" && (
+                                <>
+                                  <div>
+                                    <label className="block text-sm font-medium text-blue-900 mb-1">
+                                      Azure Endpoint
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={llmConfig.azureEndpoint}
+                                      onChange={(e) =>
+                                        setLLMConfig((prev) => ({ ...prev, azureEndpoint: e.target.value }))
+                                      }
+                                      placeholder="https://your-resource.openai.azure.com"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-sm font-medium text-blue-900 mb-1">
+                                      Deployment Name
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={llmConfig.azureDeployment}
+                                      onChange={(e) =>
+                                        setLLMConfig((prev) => ({ ...prev, azureDeployment: e.target.value }))
+                                      }
+                                      placeholder="your-deployment-name"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                    />
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
                       {/* File Upload Area */}
                       <div
                         className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
