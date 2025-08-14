@@ -47,7 +47,6 @@
     "next": "14.2.16",
     "next-themes": "latest",
     "node-ssh": "latest",
-    "openai": "latest",
     "path": "latest",
     "pg": "latest",
     "pg-native": "latest",
@@ -60,9 +59,7 @@
     "sonner": "latest",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
-    "vaul": "latest",
-    "ws": "latest",
-    "zod": "latest"
+    "vaul": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",
