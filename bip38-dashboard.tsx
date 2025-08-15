@@ -1577,8 +1577,8 @@ export default function Component() {
             </CardHeader>
             <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
               <div className="text-xl sm:text-2xl font-bold text-gray-900">
-                1,0654,046,303
-                {/* dashboardData.totalPassphrases.toLocaleString() */}
+                
+                { dashboardData.totalPassphrases.toLocaleString()}
               </div>
               <p className="text-xs text-gray-600 mt-1">Total passphrases</p>
               <div className="mt-2 text-xs text-gray-600">
