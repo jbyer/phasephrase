@@ -457,6 +457,11 @@ export default function Component() {
   const fetchTotalJobs = useCallback(async () => {
     try {
       const response = await fetch("/api/jobs/total")
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
       const data = await response.json()
 
       if (data.success) {
@@ -464,6 +469,15 @@ export default function Component() {
           ...prev,
           totalJobs: data.totalJobs,
         }))
+      } else {
+        console.error("API returned error:", data.error, data.details)
+        // Use fallback value if provided
+        if (data.totalJobs !== undefined) {
+          setDashboardData((prev) => ({
+            ...prev,
+            totalJobs: data.totalJobs,
+          }))
+        }
       }
     } catch (error) {
       console.error("Error fetching total jobs:", error)
