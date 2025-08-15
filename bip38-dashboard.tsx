@@ -1567,12 +1567,12 @@ export default function Component() {
             </CardContent>
           </Card>
 
-          {/* Total Database */}
+          {/* Total Jobs */}
           <Card
             className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
-              <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Total Database</CardTitle>
+              <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Total Jobs</CardTitle>
               <Database className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
             </CardHeader>
             <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
