@@ -136,6 +136,7 @@ export default function Component() {
     minersWorking: 10,
     passphrasesToRun: 150185002,
     totalPassphrases: 10000,
+    totalJobs: 0, // New field for actual database jobs count
     daysRemaining: 12.5,
     hashRate: "2.4 MH/s",
     successRate: 0.023,
@@ -453,6 +454,23 @@ export default function Component() {
   const [generateVariations, setGenerateVariations] = useState(false)
   const [showLLMConfig, setShowLLMConfig] = useState(false)
 
+  const fetchTotalJobs = useCallback(async () => {
+    try {
+      const response = await fetch("/api/jobs/total")
+      const data = await response.json()
+
+      if (data.success) {
+        setDashboardData((prev) => ({
+          ...prev,
+          totalJobs: data.totalJobs,
+        }))
+      }
+    } catch (error) {
+      console.error("Error fetching total jobs:", error)
+      // Keep existing value on error
+    }
+  }, [])
+
   const fetchActiveMiners = useCallback(async () => {
     try {
       const response = await fetch("/api/miners/active")
@@ -477,6 +495,15 @@ export default function Component() {
     setIsMounted(true)
     setCurrentTime(new Date())
   }, [])
+
+  useEffect(() => {
+    fetchTotalJobs()
+
+    // Refresh total jobs every 60 seconds
+    const interval = setInterval(fetchTotalJobs, 60000)
+
+    return () => clearInterval(interval)
+  }, [fetchTotalJobs])
 
   useEffect(() => {
     // Initial fetch
@@ -1577,13 +1604,10 @@ export default function Component() {
             </CardHeader>
             <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
               <div className="text-xl sm:text-2xl font-bold text-gray-900">
-                
-                { dashboardData.totalPassphrases.toLocaleString()}
+                {dashboardData.totalJobs.toLocaleString()}
               </div>
-              <p className="text-xs text-gray-600 mt-1">Total passphrases</p>
-              <div className="mt-2 text-xs text-gray-600">
-                Processed: {(dashboardData.totalPassphrases - dashboardData.passphrasesToRun).toLocaleString()}
-              </div>
+              <p className="text-xs text-gray-600 mt-1">Database jobs processed</p>
+              <div className="mt-2 text-xs text-gray-600">Live count from database</div>
             </CardContent>
           </Card>
 
