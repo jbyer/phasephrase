@@ -16,16 +16,13 @@ const ALLOWED_TYPES = [
 const allowedExtensions = [".csv", ".txt", ".xls", ".xlsx"]
 
 interface LLMConfig {
-  provider: "openai" | "azure"
+  provider: "openai"
   apiKey: string
   model: string
   temperature: number
   minWords: number
   maxWords: number
   phrasesPerRow: number
-  azureEndpoint?: string
-  azureDeployment?: string
-  azureApiVersion?: string
 }
 
 async function generatePhraseVariations(
@@ -34,22 +31,9 @@ async function generatePhraseVariations(
   seedWords?: string[],
 ): Promise<string[]> {
   try {
-    let client: OpenAI
-
-    if (config.provider === "azure") {
-      client = new OpenAI({
-        apiKey: config.apiKey,
-        baseURL: `${config.azureEndpoint}/openai/deployments/${config.azureDeployment}`,
-        defaultQuery: { "api-version": config.azureApiVersion },
-        defaultHeaders: {
-          "api-key": config.apiKey,
-        },
-      })
-    } else {
-      client = new OpenAI({
-        apiKey: config.apiKey,
-      })
-    }
+    const client = new OpenAI({
+      apiKey: config.apiKey,
+    })
 
     const seedWordsPrompt =
       seedWords && seedWords.length > 0 ? `Incorporate these seed words when possible: ${seedWords.join(", ")}. ` : ""
@@ -151,16 +135,13 @@ export async function POST(request: NextRequest) {
     const generateVariations = formData.get("generateVariations") === "true"
 
     const llmConfig: LLMConfig = {
-      provider: (formData.get("llmProvider") as string) || "openai",
+      provider: "openai",
       apiKey: (formData.get("apiKey") as string) || process.env.OPENAI_API_KEY || "",
       model: (formData.get("model") as string) || "gpt-3.5-turbo",
       temperature: Number.parseFloat(formData.get("temperature") as string) || 0.7,
       minWords: Number.parseInt(formData.get("minWords") as string) || 3,
       maxWords: Number.parseInt(formData.get("maxWords") as string) || 8,
       phrasesPerRow: Number.parseInt(formData.get("phrasesPerRow") as string) || 3,
-      azureEndpoint: formData.get("azureEndpoint") as string,
-      azureDeployment: formData.get("azureDeployment") as string,
-      azureApiVersion: (formData.get("azureApiVersion") as string) || "2024-02-15-preview",
     }
 
     if (!file) {

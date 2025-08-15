@@ -84,16 +84,13 @@ interface MinerSSHConfig {
 
 // LLM configuration interface
 interface LLMConfig {
-  provider: "openai" | "azure"
+  provider: "openai"
   apiKey: string
   model: string
   temperature: number
   minWords: number
   maxWords: number
   phrasesPerRow: number
-  azureEndpoint: string
-  azureDeployment: string
-  azureApiVersion: string
 }
 
 export default function Component() {
@@ -445,16 +442,13 @@ export default function Component() {
   const [showClearDialog, setShowClearDialog] = useState(false)
 
   const [llmConfig, setLLMConfig] = useState<LLMConfig>({
-    provider: "openai" as "openai" | "azure",
+    provider: "openai",
     apiKey: "",
     model: "gpt-3.5-turbo",
     temperature: 0.7,
     minWords: 3,
     maxWords: 8,
     phrasesPerRow: 3,
-    azureEndpoint: "",
-    azureDeployment: "",
-    azureApiVersion: "2024-02-15-preview",
   })
   const [generateVariations, setGenerateVariations] = useState(false)
   const [showLLMConfig, setShowLLMConfig] = useState(false)
@@ -762,19 +756,12 @@ export default function Component() {
       formData.append("generateVariations", generateVariations.toString())
 
       if (generateVariations) {
-        formData.append("llmProvider", llmConfig.provider)
         formData.append("apiKey", llmConfig.apiKey)
         formData.append("model", llmConfig.model)
         formData.append("temperature", llmConfig.temperature.toString())
         formData.append("minWords", llmConfig.minWords.toString())
         formData.append("maxWords", llmConfig.maxWords.toString())
         formData.append("phrasesPerRow", llmConfig.phrasesPerRow.toString())
-
-        if (llmConfig.provider === "azure") {
-          formData.append("azureEndpoint", llmConfig.azureEndpoint)
-          formData.append("azureDeployment", llmConfig.azureDeployment)
-          formData.append("azureApiVersion", llmConfig.azureApiVersion)
-        }
       }
 
       // Simulate upload progress
@@ -1815,29 +1802,12 @@ export default function Component() {
                           <div className="space-y-4 border-t border-blue-200 pt-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
-                                <label className="block text-sm font-medium text-blue-900 mb-1">Provider</label>
-                                <select
-                                  value={llmConfig.provider}
-                                  onChange={(e) =>
-                                    setLLMConfig((prev) => ({
-                                      ...prev,
-                                      provider: e.target.value as "openai" | "azure",
-                                    }))
-                                  }
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                                >
-                                  <option value="openai">OpenAI</option>
-                                  <option value="azure">Azure OpenAI</option>
-                                </select>
-                              </div>
-
-                              <div>
                                 <label className="block text-sm font-medium text-blue-900 mb-1">API Key</label>
                                 <input
                                   type="password"
                                   value={llmConfig.apiKey}
                                   onChange={(e) => setLLMConfig((prev) => ({ ...prev, apiKey: e.target.value }))}
-                                  placeholder="Enter your API key"
+                                  placeholder="Enter OpenAI API key"
                                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                                 />
                               </div>
@@ -1899,40 +1869,6 @@ export default function Component() {
                                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                                 />
                               </div>
-
-                              {llmConfig.provider === "azure" && (
-                                <>
-                                  <div>
-                                    <label className="block text-sm font-medium text-blue-900 mb-1">
-                                      Azure Endpoint
-                                    </label>
-                                    <input
-                                      type="text"
-                                      value={llmConfig.azureEndpoint}
-                                      onChange={(e) =>
-                                        setLLMConfig((prev) => ({ ...prev, azureEndpoint: e.target.value }))
-                                      }
-                                      placeholder="https://your-resource.openai.azure.com"
-                                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                                    />
-                                  </div>
-
-                                  <div>
-                                    <label className="block text-sm font-medium text-blue-900 mb-1">
-                                      Deployment Name
-                                    </label>
-                                    <input
-                                      type="text"
-                                      value={llmConfig.azureDeployment}
-                                      onChange={(e) =>
-                                        setLLMConfig((prev) => ({ ...prev, azureDeployment: e.target.value }))
-                                      }
-                                      placeholder="your-deployment-name"
-                                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                                    />
-                                  </div>
-                                </>
-                              )}
                             </div>
                           </div>
                         )}
