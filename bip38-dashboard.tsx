@@ -1568,7 +1568,8 @@ export default function Component() {
             </CardHeader>
             <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
               <div className="text-xl sm:text-2xl font-bold text-gray-900">
-                {realTimeActiveMiners !== null ? realTimeActiveMiners : dashboardData.minersWorking}
+                realTimeActiveMiners
+                {/*realTimeActiveMiners !== null ? realTimeActiveMiners : dashboardData.minersWorking*/}
               </div>
               <p className="text-xs text-gray-600 mt-1">Currently processing</p>
               {lastDatabaseUpdate && (
