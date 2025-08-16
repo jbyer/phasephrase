@@ -91,6 +91,7 @@ interface LLMConfig {
   minWords: number
   maxWords: number
   phrasesPerRow: number
+  seedWords: string
 }
 
 export default function Component() {
@@ -450,47 +451,39 @@ export default function Component() {
     minWords: 3,
     maxWords: 8,
     phrasesPerRow: 3,
+    seedWords: "",
   })
   const [generateVariations, setGenerateVariations] = useState(false)
   const [showLLMConfig, setShowLLMConfig] = useState(false)
 
   const fetchTotalJobs = useCallback(async () => {
     try {
-      console.log("[v0] Fetching total jobs from API")
       const response = await fetch("/api/jobs/total")
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
-      const contentType = response.headers.get("content-type")
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await response.text()
-        throw new Error(`Server returned non-JSON response: ${text.substring(0, 100)}`)
-      }
-
       const data = await response.json()
-      console.log("[v0] API response:", data)
 
       if (data.success) {
-        console.log("[v0] Successfully fetched total jobs:", data.totalJobs)
         setDashboardData((prev) => ({
           ...prev,
           totalJobs: data.totalJobs,
         }))
       } else {
-        console.log("[v0] API returned error, using fallback:", data.error, data.details)
-        setDashboardData((prev) => ({
-          ...prev,
-          totalJobs: data.totalJobs || 150185002, // Use provided fallback or default
-        }))
+        console.error("API returned error:", data.error, data.details)
+        // Use fallback value if provided
+        if (data.totalJobs !== undefined) {
+          setDashboardData((prev) => ({
+            ...prev,
+            totalJobs: data.totalJobs,
+          }))
+        }
       }
     } catch (error) {
-      console.error("[v0] Error fetching total jobs:", error)
-      setDashboardData((prev) => ({
-        ...prev,
-        totalJobs: 150185002,
-      }))
+      console.error("Error fetching total jobs:", error)
+      // Keep existing value on error
     }
   }, [])
 
@@ -1848,6 +1841,27 @@ export default function Component() {
                         {/* LLM Configuration Panel */}
                         {generateVariations && showLLMConfig && (
                           <div className="space-y-4 border-t border-blue-200 pt-4">
+                            <div className="mb-4">
+                              <label className="block text-sm font-medium text-blue-900 mb-1">
+                                Seed Words (Optional)
+                              </label>
+                              <input
+                                type="text"
+                                value={llmConfig.seedWords}
+                                onChange={(e) => {
+                                  const words = e.target.value.split(" ").filter((word) => word.trim() !== "")
+                                  if (words.length <= 3) {
+                                    setLLMConfig((prev) => ({ ...prev, seedWords: e.target.value }))
+                                  }
+                                }}
+                                placeholder="Enter up to 3 words to influence phrase generation"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                              />
+                              <p className="text-xs text-blue-700 mt-1">
+                                Enter up to 3 words that will be incorporated into the generated phrase variations
+                              </p>
+                            </div>
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
                                 <label className="block text-sm font-medium text-blue-900 mb-1">API Key</label>
