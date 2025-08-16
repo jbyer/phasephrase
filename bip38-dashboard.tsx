@@ -134,7 +134,7 @@ export default function Component() {
   // Mock data - replace with real data from your application
   const [dashboardData, setDashboardData] = useState({
     minersWorking: 10,
-    passphrasesToRun: 150185002,
+    // passphrasesToRun: 150185002,
     totalPassphrases: 10000,
     totalJobs: 0, // New field for actual database jobs count
     daysRemaining: 12.5,
