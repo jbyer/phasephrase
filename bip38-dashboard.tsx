@@ -459,6 +459,16 @@ export default function Component() {
       console.log("[v0] Fetching total jobs from API")
       const response = await fetch("/api/jobs/total")
 
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text()
+        throw new Error(`Server returned non-JSON response: ${text.substring(0, 100)}`)
+      }
+
       const data = await response.json()
       console.log("[v0] API response:", data)
 

@@ -7,7 +7,7 @@ function getPool() {
   if (!pool) {
     if (!process.env.DATABASE_URL) {
       console.log("[v0] DATABASE_URL environment variable is not set")
-      throw new Error("DATABASE_URL environment variable is not set")
+      return null
     }
 
     console.log("[v0] Creating new database pool connection")
@@ -23,15 +23,13 @@ export async function GET() {
   try {
     console.log("[v0] Starting total jobs API request")
 
-    let dbPool: Pool
-    try {
-      dbPool = getPool()
-    } catch (poolError) {
-      console.log("[v0] Database pool creation failed:", poolError)
+    const dbPool = getPool()
+    if (!dbPool) {
+      console.log("[v0] Database pool creation failed: DATABASE_URL not configured")
       return NextResponse.json(
         {
           error: "Database connection not configured",
-          details: "DATABASE_URL environment variable is required",
+          details: "DATABASE_URL environment variable is required. Please set it in Project Settings.",
           success: false,
           totalJobs: 150185002, // Fallback to mock data
         },
@@ -40,14 +38,38 @@ export async function GET() {
     }
 
     console.log("[v0] Executing SQL query for total jobs")
-    // Query to get total jobs from wallets table
-    const result = await dbPool.query("SELECT SUM(jobs) as total_jobs FROM btcr.wallets")
+    const result = await Promise.race([
+      dbPool.query("SELECT SUM(jobs) as total_jobs FROM btcr.wallets"),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Database query timeout")), 10000)),
+    ])
+
     console.log("[v0] Query result:", result.rows[0])
 
     const totalJobs = result.rows[0]?.total_jobs || 0
 
+    let jobCount = 0
+    try {
+      if (typeof totalJobs === "string") {
+        jobCount = Number.parseInt(totalJobs, 10)
+      } else if (typeof totalJobs === "number") {
+        jobCount = totalJobs
+      } else if (typeof totalJobs === "bigint") {
+        jobCount = Number(totalJobs)
+      } else {
+        jobCount = 0
+      }
+
+      // Ensure the number is valid and not NaN
+      if (isNaN(jobCount) || !isFinite(jobCount)) {
+        jobCount = 0
+      }
+    } catch (parseError) {
+      console.error("[v0] Error parsing job count:", parseError)
+      jobCount = 0
+    }
+
     return NextResponse.json({
-      totalJobs: Number.parseInt(totalJobs.toString()),
+      totalJobs: jobCount,
       success: true,
     })
   } catch (error) {
