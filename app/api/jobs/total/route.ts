@@ -32,19 +32,19 @@ function createSSHTunnel(): Promise<{ pool: Pool; cleanup: () => void }> {
         console.log("[v0] SSH tunnel created successfully")
 
         const tunnelPool = new Pool({
-          host: "localhost",
+          host: "127.0.0.1", // Connect through localhost
           port: 5432,
           database: "btcr_prod",
-          user: "postgres", // Using proper database user instead of SSH user
-          password: process.env.DB_PASSWORD || "Year20careful!", // Allow override via env var
-          stream: stream,
+          user: "postgres",
+          password: process.env.DB_PASSWORD || "Year20careful!",
           connectionTimeoutMillis: 5000,
-          max: 1, // Single connection through SSH tunnel
+          max: 1,
         })
 
         const cleanup = () => {
           console.log("[v0] Cleaning up SSH tunnel and database connection")
           tunnelPool.end()
+          stream.end()
           sshClient.end()
         }
 
