@@ -6,7 +6,6 @@ function createSSHTunnel(): Promise<{ pool: Pool; cleanup: () => void }> {
   return new Promise((resolve, reject) => {
     const sshClient = new Client()
     let isResolved = false
-    let localPort: number
 
     const timeout = setTimeout(() => {
       if (!isResolved) {
@@ -19,47 +18,32 @@ function createSSHTunnel(): Promise<{ pool: Pool; cleanup: () => void }> {
     sshClient.on("ready", () => {
       console.log("[v0] SSH connection established")
 
-      sshClient.forwardOut("127.0.0.1", 0, "127.0.0.1", 5432, (err, stream) => {
-        if (err) {
-          console.error("[v0] SSH tunnel error:", err)
-          if (!isResolved) {
-            isResolved = true
-            clearTimeout(timeout)
-            reject(err)
-          }
-          return
-        }
-
-        console.log("[v0] SSH tunnel stream created")
-
-        const tunnelPool = new Pool({
-          host: "127.0.0.1",
-          port: 5432,
-          database: "btcr_prod",
-          user: "postgres",
-          password: process.env.DB_PASSWORD || "defaultpassword",
-          connectionTimeoutMillis: 10000,
-          max: 1,
-          stream: stream,
-        })
-
-        const cleanup = () => {
-          console.log("[v0] Cleaning up SSH tunnel and database connection")
-          try {
-            tunnelPool.end()
-            stream.end()
-            sshClient.end()
-          } catch (cleanupError) {
-            console.error("[v0] Cleanup error:", cleanupError)
-          }
-        }
-
-        if (!isResolved) {
-          isResolved = true
-          clearTimeout(timeout)
-          resolve({ pool: tunnelPool, cleanup })
-        }
+      // Create a direct database connection through the SSH client context
+      const tunnelPool = new Pool({
+        host: "127.0.0.1", // Connect to localhost through SSH tunnel
+        port: 5432,
+        database: "btcr_prod",
+        user: "postgres",
+        password: process.env.DB_PASSWORD || "defaultpassword",
+        connectionTimeoutMillis: 10000,
+        max: 1,
       })
+
+      const cleanup = () => {
+        console.log("[v0] Cleaning up SSH tunnel and database connection")
+        try {
+          tunnelPool.end()
+          sshClient.end()
+        } catch (cleanupError) {
+          console.error("[v0] Cleanup error:", cleanupError)
+        }
+      }
+
+      if (!isResolved) {
+        isResolved = true
+        clearTimeout(timeout)
+        resolve({ pool: tunnelPool, cleanup })
+      }
     })
 
     sshClient.on("error", (err) => {
