@@ -459,6 +459,43 @@ export default function Component() {
   const [generateVariations, setGenerateVariations] = useState(false)
   const [showLLMConfig, setShowLLMConfig] = useState(false)
 
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchResults, setSearchResults] = useState<any[]>([])
+
+  const handleDatabaseSearch = async () => {
+    if (!searchTerm.trim()) {
+      setSearchResults([])
+      return
+    }
+
+    setIsSearching(true)
+    try {
+      console.log("[v0] Initiating database search for:", searchTerm)
+      const response = await fetch("/api/search-jobs", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ searchTerm }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        console.log("[v0] Database search completed, found:", data.passphrases.length, "results")
+        setSearchResults(data.passphrases)
+      } else {
+        console.error("[v0] Database search failed:", data.error)
+        setSearchResults([])
+      }
+    } catch (error) {
+      console.error("[v0] Database search error:", error)
+      setSearchResults([])
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
   const fetchTotalJobs = useCallback(async () => {
     try {
       const response = await fetch("/api/jobs/total")
@@ -960,7 +997,8 @@ export default function Component() {
     }
   }
 
-  const filteredPassphrases = passphrases.filter((p) => {
+  const allPassphrases = [...passphrases, ...searchResults]
+  const filteredPassphrases = allPassphrases.filter((p) => {
     const matchesSearch =
       p.passphrase.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.description.toLowerCase().includes(searchTerm.toLowerCase())
@@ -1843,10 +1881,35 @@ export default function Component() {
                   placeholder="Search passphrases..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleDatabaseSearch()
+                    }
+                  }}
                   className="pl-8 sm:pl-10 bg-white border-gray-300 text-gray-900 text-sm"
                 />
               </div>
               <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDatabaseSearch}
+                  disabled={isSearching || !searchTerm.trim()}
+                  className="bg-white border-gray-300 hover:bg-gray-50 text-xs sm:text-sm"
+                >
+                  {isSearching ? (
+                    <>
+                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600 mr-1"></div>
+                      Searching...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="w-3 h-3 mr-1" />
+                      Search DB
+                    </>
+                  )}
+                </Button>
+
                 {/* File Upload Button */}
                 <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
                   <DialogTrigger asChild>
@@ -2216,9 +2279,18 @@ export default function Component() {
                 {/* Statistics */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
                   <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <div className="text-base sm:text-lg font-semibold text-gray-900">{passphrases.length}</div>
+                    <div className="text-base sm:text-lg font-semibold text-gray-900">{allPassphrases.length}</div>
                     <div className="text-xs text-gray-600">Total</div>
                   </div>
+                  <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="text-base sm:text-lg font-semibold text-gray-900">{passphrases.length}</div>
+                    <div className="text-xs text-gray-600">Local</div>
+                  </div>
+                  <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="text-base sm:text-lg font-semibold text-gray-900">{searchResults.length}</div>
+                    <div className="text-xs text-gray-600">Database</div>
+                  </div>
+
                   <div className="text-center p-2 sm:p-3 bg-amber-50 rounded-lg border border-amber-200">
                     <div className="text-base sm:text-lg font-semibold text-amber-700">
                       {passphrases.filter((p) => p.status === "pending").length}
