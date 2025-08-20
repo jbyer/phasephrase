@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server"
-import { Pool } from "pg"
 import { Client } from "ssh2"
 
-function createSSHTunnel(): Promise<{ pool: Pool; cleanup: () => void }> {
+function executeSSHQuery(): Promise<number> {
   return new Promise((resolve, reject) => {
     const sshClient = new Client()
     let isResolved = false
@@ -18,53 +17,49 @@ function createSSHTunnel(): Promise<{ pool: Pool; cleanup: () => void }> {
     sshClient.on("ready", () => {
       console.log("[v0] SSH connection established")
 
-      sshClient.forwardOut(
-        "127.0.0.1", // source host
-        0, // source port (0 = any available port)
-        "127.0.0.1", // destination host (localhost on remote server)
-        5432, // destination port (PostgreSQL port on remote server)
-        (err, stream) => {
-          if (err) {
-            console.error("[v0] SSH tunnel creation failed:", err)
-            if (!isResolved) {
-              isResolved = true
-              clearTimeout(timeout)
-              reject(err)
-            }
-            return
+      const query = `psql -h localhost -U postgres -d btcr_prod -t -c "SELECT COALESCE(SUM(jobs), 0) as total_jobs FROM btcr.wallets WHERE jobs IS NOT NULL;"`
+
+      sshClient.exec(query, (err, stream) => {
+        if (err) {
+          console.error("[v0] SSH command execution failed:", err)
+          if (!isResolved) {
+            isResolved = true
+            clearTimeout(timeout)
+            reject(err)
           }
+          return
+        }
 
-          console.log("[v0] SSH tunnel stream created successfully")
+        let output = ""
+        let errorOutput = ""
 
-          // Create database connection using the tunneled stream
-          const tunnelPool = new Pool({
-            host: "192.168.100.67", // Connect directly to the SSH server
-            port: 5432,
-            database: "btcr_prod",
-            user: "postgres",
-            password: process.env.DB_PASSWORD || "defaultpassword",
-            connectionTimeoutMillis: 10000,
-            max: 1,
-          })
-
-          const cleanup = () => {
-            console.log("[v0] Cleaning up SSH tunnel and database connection")
-            try {
-              tunnelPool.end()
-              stream.end()
-              sshClient.end()
-            } catch (cleanupError) {
-              console.error("[v0] Cleanup error:", cleanupError)
-            }
-          }
+        stream.on("close", (code: number) => {
+          console.log("[v0] SSH command completed with code:", code)
+          sshClient.end()
 
           if (!isResolved) {
             isResolved = true
             clearTimeout(timeout)
-            resolve({ pool: tunnelPool, cleanup })
+
+            if (code === 0) {
+              const totalJobs = Number.parseInt(output.trim()) || 0
+              console.log("[v0] Total jobs retrieved:", totalJobs)
+              resolve(totalJobs)
+            } else {
+              reject(new Error(`Command failed with code ${code}: ${errorOutput}`))
+            }
           }
-        },
-      )
+        })
+
+        stream.on("data", (data: Buffer) => {
+          output += data.toString()
+        })
+
+        stream.stderr.on("data", (data: Buffer) => {
+          errorOutput += data.toString()
+          console.error("[v0] SSH command stderr:", data.toString())
+        })
+      })
     })
 
     sshClient.on("error", (err) => {
@@ -89,50 +84,20 @@ function createSSHTunnel(): Promise<{ pool: Pool; cleanup: () => void }> {
 }
 
 export async function GET() {
-  let cleanup: (() => void) | null = null
-
   try {
-    console.log("[v0] Starting SSH database connection process")
+    console.log("[v0] Starting SSH database query process")
 
-    const { pool: sshPool, cleanup: sshCleanup } = await createSSHTunnel()
-    cleanup = sshCleanup
-
-    console.log("[v0] SSH tunnel established, testing database connection")
-
-    await sshPool.query("SELECT 1 as test")
-    console.log("[v0] Database connection test successful")
-
-    console.log("[v0] Querying btcr.wallets table for job count")
-
-    const result = await sshPool.query(`
-      SELECT COALESCE(SUM(jobs), 0) as total_jobs 
-      FROM btcr.wallets 
-      WHERE jobs IS NOT NULL
-    `)
-
-    const totalJobs = result.rows[0]?.total_jobs || 0
-    console.log("[v0] Total jobs retrieved:", totalJobs)
-
-    // Clean up SSH connection
-    cleanup()
-    cleanup = null
+    const totalJobs = await executeSSHQuery()
+    console.log("[v0] Successfully retrieved total jobs:", totalJobs)
 
     return NextResponse.json({
-      totalJobs: Number.parseInt(totalJobs.toString()),
+      totalJobs: totalJobs,
       success: true,
       source: "ssh-database",
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
     console.error("[v0] Error in SSH database operation:", error)
-
-    if (cleanup) {
-      try {
-        cleanup()
-      } catch (cleanupError) {
-        console.error("[v0] Error during cleanup:", cleanupError)
-      }
-    }
 
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
     console.log("[v0] Returning fallback data due to error:", errorMessage)
