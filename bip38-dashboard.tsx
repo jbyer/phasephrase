@@ -22,12 +22,10 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-  Search,
   Plus,
   Trash2,
   Eye,
   EyeOff,
-  Download,
   Upload,
   FileText,
   AlertCircle,
@@ -39,9 +37,10 @@ import {
 } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Server, Monitor, Wifi, WifiOff, RefreshCw, PowerOff } from "lucide-react"
+import { RefreshCw, PowerOff } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 
 // File upload types and interfaces
 interface UploadedFile {
@@ -165,6 +164,8 @@ export default function Component() {
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [newPassphrase, setNewPassphrase] = useState("")
   const [newDescription, setNewDescription] = useState("")
+  const [generateAIVariations, setGenerateAIVariations] = useState(false)
+
   const [passphrases, setPassphrases] = useState([
     {
       id: 1,
@@ -998,6 +999,7 @@ export default function Component() {
       setPassphrases([...passphrases, newEntry])
       setNewPassphrase("")
       setNewDescription("")
+      setGenerateAIVariations(false)
       setShowAddDialog(false)
 
       // Update dashboard data
@@ -1662,34 +1664,169 @@ export default function Component() {
                   variant="outline"
                   size="sm"
                   onClick={() => setShowPassphrases(!showPassphrases)}
-                  className="bg-white border-gray-300 hover:bg-gray-50 text-xs sm:text-sm"
+                  className={`flex items-center gap-2 ${getThemeClasses(viewMode).buttonOutline} text-sm`}
                 >
                   {showPassphrases ? (
-                    <EyeOff className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                    <>
+                      <EyeOff className="w-3 h-3 sm:w-4 sm:h-4" />
+                      Hide Passphrases
+                    </>
                   ) : (
-                    <Eye className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                    <>
+                      <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
+                      Show Passphrases
+                    </>
                   )}
-                  {showPassphrases ? "Hide" : "Show"} Passphrases
                 </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => setShowAddDialog(true)}
+                  className={`flex items-center gap-2 shadow-md text-sm ${getThemeClasses(viewMode).button}`}
+                >
+                  <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
+                  Add Passphrase
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
 
+          <CardContent className="p-3 sm:p-4">
+            {/* Search and Filters */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
+              <Input
+                type="search"
+                placeholder="Search passphrase or description..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="col-span-1 sm:col-span-2 lg:col-span-4"
+              />
+
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Filter by Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="processing">Processing</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="failed">Failed</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={filterPriority} onValueChange={setFilterPriority}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Filter by Priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Priorities</SelectItem>
+                  <SelectItem value="High">High</SelectItem>
+                  <SelectItem value="Medium">Medium</SelectItem>
+                  <SelectItem value="Low">Low</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <div className="flex items-center gap-2">
+                <Label htmlFor="start-date" className="text-sm text-gray-700">
+                  Start Date:
+                </Label>
+                <Input
+                  type="date"
+                  id="start-date"
+                  value={filterStartDate}
+                  onChange={(e) => setFilterStartDate(e.target.value)}
+                  className="text-sm"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Label htmlFor="end-date" className="text-sm text-gray-700">
+                  End Date:
+                </Label>
+                <Input
+                  type="date"
+                  id="end-date"
+                  value={filterEndDate}
+                  onChange={(e) => setFilterEndDate(e.target.value)}
+                  className="text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Passphrase Table */}
+            {showPassphrases ? (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[50px]">ID</TableHead>
+                      <TableHead>Passphrase</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Date Added</TableHead>
+                      <TableHead>Priority</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredPassphrases.length > 0 ? (
+                      filteredPassphrases.map((p) => (
+                        <TableRow key={p.id}>
+                          <TableCell className="font-medium">{p.id}</TableCell>
+                          <TableCell>{p.passphrase}</TableCell>
+                          <TableCell>{p.description}</TableCell>
+                          <TableCell>
+                            <Badge className={`${getStatusBadge(p.status)}`}>{p.status}</Badge>
+                          </TableCell>
+                          <TableCell>{p.dateAdded}</TableCell>
+                          <TableCell>
+                            <Badge className={`${getPriorityBadge(p.priority)}`}>{p.priority}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeletePassphrase(p.id)}
+                              className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-4">
+                          No passphrases found.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <FileText className="h-12 w-12 mx-auto text-gray-300 mb-2" />
+                <p>Passphrases are hidden. Click "Show Passphrases" to view.</p>
+              </div>
+            )}
+
+            {/* Clear All Button */}
+            {passphrases.length > 0 && (
+              <div className="flex justify-end mt-4">
                 <Dialog open={showClearDialog} onOpenChange={setShowClearDialog}>
                   <DialogTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={passphrases.length === 0}
-                      className="bg-white border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 text-xs sm:text-sm"
-                    >
-                      <Trash2 className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                      Clear All
+                    <Button variant="destructive" size="sm" className="flex items-center gap-2 shadow-md text-sm">
+                      <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                      Clear All Passphrases
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="bg-white border-gray-200">
+                  <DialogContent className="bg-white border-gray-200 max-w-md">
                     <DialogHeader>
-                      <DialogTitle className="text-gray-900">Clear All Passphrases</DialogTitle>
+                      <DialogTitle className="text-gray-900">Confirm Clear All</DialogTitle>
                       <DialogDescription className="text-gray-600">
-                        Are you sure you want to clear all passphrases? This action cannot be undone and will remove all{" "}
-                        {passphrases.length} passphrases from the list.
+                        Are you sure you want to clear all passphrases? This action cannot be undone.
                       </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
@@ -1700,546 +1837,108 @@ export default function Component() {
                       >
                         Cancel
                       </Button>
-                      <Button onClick={handleClearAllPassphrases} className="bg-red-600 hover:bg-red-700 text-white">
-                        Clear All Passphrases
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-
-                <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-                  <DialogTrigger asChild>
-                    <Button
-                      className={`flex items-center gap-1 sm:gap-2 ${getThemeClasses(viewMode).button} shadow-md text-xs sm:text-sm`}
-                    >
-                      <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
-                      Add Passphrase
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="bg-white border-gray-200">
-                    <DialogHeader>
-                      <DialogTitle className="text-gray-900">Add New Passphrase</DialogTitle>
-                      <DialogDescription className="text-gray-600">
-                        Add a new passphrase to the decryption queue
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="passphrase" className="text-gray-700">
-                          Passphrase
-                        </Label>
-                        <Input
-                          id="passphrase"
-                          value={newPassphrase}
-                          onChange={(e) => setNewPassphrase(e.target.value)}
-                          placeholder="Enter passphrase..."
-                          className="bg-white border-gray-300 text-gray-900"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="description" className="text-gray-700">
-                          Description (Optional)
-                        </Label>
-                        <Textarea
-                          id="description"
-                          value={newDescription}
-                          onChange={(e) => setNewDescription(e.target.value)}
-                          placeholder="Add a description for this passphrase..."
-                          className="bg-white border-gray-300 text-gray-900"
-                          rows={3}
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => setShowAddDialog(false)}
-                        className="bg-white border-gray-300"
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={handleAddPassphrase}
-                        disabled={!newPassphrase.trim()}
-                        className={getThemeClasses(viewMode).button}
-                      >
-                        Add Passphrase
+                      <Button variant="destructive" onClick={handleClearAllPassphrases}>
+                        Clear All
                       </Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
               </div>
-            </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* File Upload */}
+        <Card className={getThemeClasses(viewMode).card}>
+          <CardHeader>
+            <CardTitle className="text-lg sm:text-xl text-gray-900">File Upload</CardTitle>
+            <CardDescription className="text-sm text-gray-600">
+              Upload a file containing passphrases to decrypt
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Search and Controls */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3 sm:w-4 sm:h-4" />
-                <Input
-                  placeholder="Search passphrases..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8 sm:pl-10 bg-white border-gray-300 text-gray-900 text-sm"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                {/* File Upload Button */}
-                <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
-                  <DialogTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="bg-white border-gray-300 hover:bg-gray-50 text-xs flex-1 sm:flex-none"
-                    >
-                      <Upload className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                      Import
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="bg-white border-gray-200 max-w-2xl">
-                    <DialogHeader>
-                      <DialogTitle className="text-gray-900">Import Passphrases</DialogTitle>
-                      <DialogDescription className="text-gray-600">
-                        Upload CSV, TXT, or Excel files containing passphrases to add to your database
-                      </DialogDescription>
-                    </DialogHeader>
+          <CardContent className="p-3 sm:p-4">
+            <div
+              className={`border-2 border-dashed rounded-md p-6 text-center cursor-pointer ${
+                dragActive ? "border-blue-500 bg-blue-50" : "border-gray-300"
+              }`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload className="w-6 h-6 mx-auto text-gray-400 mb-2" />
+              <p className="text-sm text-gray-600">Drag and drop a file here or click to browse</p>
+              <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileInputChange} />
+            </div>
 
-                    <div className="space-y-4">
-                      {/* LLM Generation Toggle */}
-                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id="generateVariations"
-                              checked={generateVariations}
-                              onChange={(e) => setGenerateVariations(e.target.checked)}
-                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            />
-                            <label htmlFor="generateVariations" className="font-medium text-blue-900">
-                              Generate AI Phrase Variations
-                            </label>
-                          </div>
-                          {generateVariations && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setShowLLMConfig(!showLLMConfig)}
-                              className="text-xs"
-                            >
-                              {showLLMConfig ? "Hide" : "Show"} Config
-                            </Button>
-                          )}
-                        </div>
+            {/* LLM Configuration */}
+            <div className="mt-4 flex items-center gap-2">
+              <Checkbox id="generate-variations" checked={generateVariations} onCheckedChange={setGenerateVariations} />
+              <Label htmlFor="generate-variations" className="text-sm text-gray-700">
+                Generate Phrase Variations with AI
+              </Label>
+            </div>
 
-                        {generateVariations && (
-                          <p className="text-sm text-blue-800 mb-3">
-                            Use AI to generate multiple variations of each passphrase in your file. This will create
-                            additional passphrases with similar meanings but different wording.
-                          </p>
-                        )}
-
-                        {/* LLM Configuration Panel */}
-                        {generateVariations && showLLMConfig && (
-                          <div className="space-y-4 border-t border-blue-200 pt-4">
-                            <div className="mb-4">
-                              <label className="block text-sm font-medium text-blue-900 mb-1">
-                                Seed Words (Optional)
-                              </label>
-                              <input
-                                type="text"
-                                value={llmConfig.seedWords}
-                                onChange={(e) => {
-                                  const words = e.target.value.split(" ").filter((word) => word.trim() !== "")
-                                  if (words.length <= 3) {
-                                    setLLMConfig((prev) => ({ ...prev, seedWords: e.target.value }))
-                                  }
-                                }}
-                                placeholder="Enter up to 3 words to influence phrase generation"
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                              />
-                              <p className="text-xs text-blue-700 mt-1">
-                                Enter up to 3 words that will be incorporated into the generated phrase variations
-                              </p>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div>
-                                <label className="block text-sm font-medium text-blue-900 mb-1">API Key</label>
-                                <input
-                                  type="password"
-                                  value={llmConfig.apiKey}
-                                  onChange={(e) => setLLMConfig((prev) => ({ ...prev, apiKey: e.target.value }))}
-                                  placeholder="Enter OpenAI API key"
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="block text-sm font-medium text-blue-900 mb-1">Model</label>
-                                <input
-                                  type="text"
-                                  value={llmConfig.model}
-                                  onChange={(e) => setLLMConfig((prev) => ({ ...prev, model: e.target.value }))}
-                                  placeholder="gpt-3.5-turbo"
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="block text-sm font-medium text-blue-900 mb-1">
-                                  Variations per Phrase
-                                </label>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  max="10"
-                                  value={llmConfig.phrasesPerRow}
-                                  onChange={(e) =>
-                                    setLLMConfig((prev) => ({
-                                      ...prev,
-                                      phrasesPerRow: Number.parseInt(e.target.value),
-                                    }))
-                                  }
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="block text-sm font-medium text-blue-900 mb-1">Min Words</label>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  max="20"
-                                  value={llmConfig.minWords}
-                                  onChange={(e) =>
-                                    setLLMConfig((prev) => ({ ...prev, minWords: Number.parseInt(e.target.value) }))
-                                  }
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="block text-sm font-medium text-blue-900 mb-1">Max Words</label>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  max="20"
-                                  value={llmConfig.maxWords}
-                                  onChange={(e) =>
-                                    setLLMConfig((prev) => ({ ...prev, maxWords: Number.parseInt(e.target.value) }))
-                                  }
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* File Upload Area */}
-                      <div
-                        className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                          dragActive ? "border-blue-400 bg-blue-50" : "border-gray-300 hover:border-gray-400"
-                        }`}
-                        onDragOver={handleDragOver}
-                        onDragLeave={handleDragLeave}
-                        onDrop={handleDrop}
-                      >
-                        <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                        <div className="space-y-2">
-                          <p className="text-lg font-medium text-gray-900">Drop your files here, or click to browse</p>
-                          <p className="text-sm text-gray-600">
-                            Supports CSV, TXT, and Excel files (.csv, .txt, .xls, .xlsx) up to 10MB
-                          </p>
-                        </div>
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept=".csv,.txt,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain"
-                          onChange={handleFileInputChange}
-                          className="hidden"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="mt-4 bg-transparent"
-                          onClick={() => fileInputRef.current?.click()}
-                        >
-                          Choose Files
-                        </Button>
-                      </div>
-
-                      {/* Upload Progress */}
-                      {uploadProgress.length > 0 && (
-                        <div className="space-y-3">
-                          <h4 className="font-medium text-gray-900">Upload Progress</h4>
-                          {uploadProgress.map((progress) => {
-                            const file = uploadedFiles.find((f) => f.id === progress.fileId)
-                            return (
-                              <div key={progress.fileId} className="space-y-2">
-                                <div className="flex items-center justify-between text-sm">
-                                  <span className="text-gray-700 truncate">{file?.name}</span>
-                                  <span className="text-gray-500">
-                                    {progress.status === "uploading" && `${progress.progress}%`}
-                                    {progress.status === "processing" && "Processing..."}
-                                    {progress.status === "complete" && "Complete"}
-                                    {progress.status === "error" && "Error"}
-                                  </span>
-                                </div>
-                                <Progress
-                                  value={progress.status === "complete" ? 100 : progress.progress}
-                                  className="h-2"
-                                />
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-
-                      {/* Uploaded Files List */}
-                      {uploadedFiles.length > 0 && (
-                        <div className="space-y-3">
-                          <h4 className="font-medium text-gray-900">Recent Uploads</h4>
-                          <div className="space-y-2 max-h-40 overflow-y-auto">
-                            {uploadedFiles.slice(-5).map((file) => (
-                              <div
-                                key={file.id}
-                                className="flex items-center justify-between p-2 bg-gray-50 rounded-md"
-                              >
-                                <div className="flex items-center space-x-3 flex-1 min-w-0">
-                                  <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
-                                    <p className="text-xs text-gray-500">
-                                      {formatFileSize(file.size)} • {file.uploadDate.toLocaleDateString()}
-                                      {file.processedCount && ` • ${file.processedCount} passphrases`}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                  <Badge
-                                    className={`text-xs ${
-                                      file.status === "success"
-                                        ? "bg-green-100 text-green-700 border-green-200"
-                                        : file.status === "error"
-                                          ? "bg-red-100 text-red-700 border-red-200"
-                                          : "bg-yellow-100 text-yellow-700 border-yellow-200"
-                                    }`}
-                                  >
-                                    {file.status === "success" && <CheckCircle className="h-3 w-3 mr-1" />}
-                                    {file.status === "error" && <AlertCircle className="h-3 w-3 mr-1" />}
-                                    {file.status}
-                                  </Badge>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => removeUploadedFile(file.id)}
-                                    className="h-6 w-6 p-0"
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* File Format Information */}
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <h4 className="font-medium text-blue-900 mb-2">File Format Requirements</h4>
-                        <ul className="text-sm text-blue-800 space-y-1">
-                          <li>• CSV files should have headers: passphrase, description, priority</li>
-                          <li>
-                            • TXT files should have one passphrase per line (description and priority will default to
-                            "Imported" and "Medium")
-                          </li>
-                          <li>• Excel files should have data starting from row 1 with headers</li>
-                          <li>• Priority values: High, Medium, Low (optional, defaults to Medium)</li>
-                          <li>• Maximum file size: 10MB</li>
-                          <li>• Supported formats: .csv, .txt, .xls, .xlsx</li>
-                        </ul>
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => setShowUploadDialog(false)}
-                        className="bg-white border-gray-300"
-                      >
-                        Close
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-
+            {generateVariations && (
+              <div className="mt-4">
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
-                  className="bg-white border-gray-300 hover:bg-gray-50 text-xs flex-1 sm:flex-none"
+                  onClick={() => setShowLLMConfig(true)}
+                  className="flex items-center gap-2 shadow-md text-sm"
                 >
-                  <Download className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                  Export
+                  <Terminal className="w-3 h-3 sm:w-4 sm:h-4" />
+                  Configure AI
                 </Button>
               </div>
-            </div>
+            )}
 
-            {showPassphrases && (
-              <>
-                {/* Filters */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="filter-status" className="text-gray-700 text-xs">
-                      Status
-                    </Label>
-                    <Select value={filterStatus} onValueChange={setFilterStatus}>
-                      <SelectTrigger id="filter-status" className="bg-white border-gray-300 text-gray-900 text-sm">
-                        <SelectValue placeholder="Filter by status" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white border-gray-200">
-                        <SelectItem value="all">All Statuses</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="processing">Processing</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="failed">Failed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="filter-priority" className="text-gray-700 text-xs">
-                      Priority
-                    </Label>
-                    <Select value={filterPriority} onValueChange={setFilterPriority}>
-                      <SelectTrigger id="filter-priority" className="bg-white border-gray-300 text-gray-900 text-sm">
-                        <SelectValue placeholder="Filter by priority" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white border-gray-200">
-                        <SelectItem value="all">All Priorities</SelectItem>
-                        <SelectItem value="High">High</SelectItem>
-                        <SelectItem value="Medium">Medium</SelectItem>
-                        <SelectItem value="Low">Low</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="grid gap-2">
-                      <Label htmlFor="filter-start-date" className="text-gray-700 text-xs">
-                        Start Date
-                      </Label>
-                      <Input
-                        id="filter-start-date"
-                        type="date"
-                        value={filterStartDate}
-                        onChange={(e) => setFilterStartDate(e.target.value)}
-                        className="bg-white border-gray-300 text-gray-900 text-sm"
-                      />
+            {/* Uploaded Files */}
+            {uploadedFiles.length > 0 && (
+              <div className="mt-6">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Uploaded Files</h3>
+                <div className="space-y-2">
+                  {uploadedFiles.map((file) => (
+                    <div
+                      key={file.id}
+                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
+                    >
+                      <div className="flex items-center gap-3">
+                        <FileText className="w-4 h-4 text-gray-400" />
+                        <div className="flex flex-col">
+                          <p className="text-sm font-medium text-gray-800">{file.name}</p>
+                          <p className="text-xs text-gray-500">
+                            {formatFileSize(file.size)} - {file.uploadDate.toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {uploadProgress.find((p) => p.fileId === file.id) && (
+                          <>
+                            {uploadProgress.find((p) => p.fileId === file.id)!.status === "uploading" && (
+                              <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+                            )}
+                            {uploadProgress.find((p) => p.fileId === file.id)!.status === "complete" && (
+                              <CheckCircle className="w-4 h-4 text-emerald-600" />
+                            )}
+                            {uploadProgress.find((p) => p.fileId === file.id)!.status === "error" && (
+                              <AlertCircle className="w-4 h-4 text-red-600" />
+                            )}
+                          </>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeUploadedFile(file.id)}
+                          className="h-6 w-6 p-0 text-gray-400 hover:text-red-600"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="filter-end-date" className="text-gray-700 text-xs">
-                        End Date
-                      </Label>
-                      <Input
-                        id="filter-end-date"
-                        type="date"
-                        value={filterEndDate}
-                        onChange={(e) => setFilterEndDate(e.target.value)}
-                        className="bg-white border-gray-300 text-gray-900 text-sm"
-                      />
-                    </div>
-                  </div>
+                  ))}
                 </div>
-
-                {/* Statistics */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
-                  <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <div className="text-base sm:text-lg font-semibold text-gray-900">{passphrases.length}</div>
-                    <div className="text-xs text-gray-600">Total</div>
-                  </div>
-                  <div className="text-center p-2 sm:p-3 bg-amber-50 rounded-lg border border-amber-200">
-                    <div className="text-base sm:text-lg font-semibold text-amber-700">
-                      {passphrases.filter((p) => p.status === "pending").length}
-                    </div>
-                    <div className="text-xs text-gray-600">Pending</div>
-                  </div>
-                  <div className="text-center p-2 sm:p-3 bg-emerald-50 rounded-lg border border-emerald-200">
-                    <div className="text-base sm:text-lg font-semibold text-emerald-700">
-                      {passphrases.filter((p) => p.status === "completed").length}
-                    </div>
-                    <div className="text-xs text-gray-600">Completed</div>
-                  </div>
-                  <div className="text-center p-2 sm:p-3 bg-red-50 rounded-lg border border-red-200">
-                    <div className="text-base sm:text-lg font-semibold text-red-700">
-                      {passphrases.filter((p) => p.status === "failed").length}
-                    </div>
-                    <div className="text-xs text-gray-600">Failed</div>
-                  </div>
-                </div>
-
-                {/* Passphrase Table */}
-                <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-gray-200 bg-gray-50">
-                          <TableHead className="text-gray-700 text-xs sm:text-sm min-w-[120px]">Passphrase</TableHead>
-                          <TableHead className="text-gray-700 text-xs sm:text-sm hidden sm:table-cell">
-                            Description
-                          </TableHead>
-                          <TableHead className="text-gray-700 text-xs sm:text-sm">Status</TableHead>
-                          <TableHead className="text-gray-700 text-xs sm:text-sm hidden md:table-cell">
-                            Priority
-                          </TableHead>
-                          <TableHead className="text-gray-700 text-xs sm:text-sm hidden md:table-cell">
-                            Date Added
-                          </TableHead>
-                          <TableHead className="text-gray-700 text-xs sm:text-sm w-16">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredPassphrases.map((passphrase) => (
-                          <TableRow key={passphrase.id} className="border-gray-200 hover:bg-gray-50">
-                            <TableCell className="text-gray-900 font-mono text-xs sm:text-sm max-w-[120px] truncate">
-                              {passphrase.passphrase}
-                            </TableCell>
-                            <TableCell className="text-gray-600 text-xs sm:text-sm hidden sm:table-cell max-w-[150px] truncate">
-                              {passphrase.description}
-                            </TableCell>
-                            <TableCell>
-                              <Badge className={`${getStatusBadge(passphrase.status)} border text-xs`}>
-                                {passphrase.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="hidden md:table-cell">
-                              <Badge className={`${getPriorityBadge(passphrase.priority)} border text-xs`}>
-                                {passphrase.priority}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-gray-600 text-xs hidden md:table-cell">
-                              {passphrase.dateAdded}
-                            </TableCell>
-                            <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeletePassphrase(passphrase.id)}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50 p-1"
-                              >
-                                <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                  {filteredPassphrases.length === 0 && (
-                    <div className="text-center py-8 text-gray-500">
-                      {searchTerm ? "No passphrases match your search" : "No passphrases found"}
-                    </div>
-                  )}
-                </div>
-              </>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -2251,542 +1950,498 @@ export default function Component() {
               <div>
                 <CardTitle className="text-lg sm:text-xl text-gray-900">Miner Management</CardTitle>
                 <CardDescription className="text-sm text-gray-600">
-                  Control and monitor your Runpod and Mac miners via SSH
+                  Manage your miners and their configurations
                 </CardDescription>
               </div>
-              <div className="flex items-center gap-2">
-                <Dialog open={showAddMinerDialog} onOpenChange={setShowAddMinerDialog}>
-                  <DialogTrigger asChild>
-                    <Button className={`flex items-center gap-2 ${getThemeClasses(viewMode).button} shadow-md`}>
-                      <Plus className="w-4 h-4" />
-                      Add Miner
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="bg-white border-gray-200">
-                    <DialogHeader>
-                      <DialogTitle className="text-gray-900">Add New Miner</DialogTitle>
-                      <DialogDescription className="text-gray-600">
-                        Add a new Runpod or Mac miner to your fleet
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="miner-type" className="text-gray-700">
-                          Miner Type
-                        </Label>
-                        <Select value={newMinerType} onValueChange={setNewMinerType}>
-                          <SelectTrigger className="bg-white border-gray-300 text-gray-900">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-white border-gray-200">
-                            <SelectItem value="runpod">Runpod GPU</SelectItem>
-                            <SelectItem value="mac">Mac Computer</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="miner-name" className="text-gray-700">
-                          Miner Name
-                        </Label>
-                        <Input
-                          id="miner-name"
-                          value={newMinerConfig.name}
-                          onChange={(e) => setNewMinerConfig((prev) => ({ ...prev, name: e.target.value }))}
-                          placeholder="Enter miner name..."
-                          className="bg-white border-gray-300 text-gray-900"
-                        />
-                      </div>
-                      {newMinerType === "runpod" ? (
-                        <>
-                          <div className="grid gap-2">
-                            <Label htmlFor="gpu" className="text-gray-700">
-                              GPU Model
-                            </Label>
-                            <Select
-                              value={newMinerConfig.gpu}
-                              onValueChange={(value) => setNewMinerConfig((prev) => ({ ...prev, gpu: value }))}
-                            >
-                              <SelectTrigger className="bg-white border-gray-300 text-gray-900">
-                                <SelectValue placeholder="Select GPU" />
-                              </SelectTrigger>
-                              <SelectContent className="bg-white border-gray-200">
-                                <SelectItem value="RTX 4090">RTX 4090</SelectItem>
-                                <SelectItem value="RTX 4080">RTX 4080</SelectItem>
-                                <SelectItem value="RTX 3090">RTX 3090</SelectItem>
-                                <SelectItem value="RTX 3080">RTX 3080</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="grid gap-2">
-                            <Label htmlFor="region" className="text-gray-700">
-                              Region
-                            </Label>
-                            <Select
-                              value={newMinerConfig.region}
-                              onValueChange={(value) => setNewMinerConfig((prev) => ({ ...prev, region: value }))}
-                            >
-                              <SelectTrigger className="bg-white border-gray-300 text-gray-900">
-                                <SelectValue placeholder="Select region" />
-                              </SelectTrigger>
-                              <SelectContent className="bg-white border-gray-200">
-                                <SelectItem value="US-West">US West</SelectItem>
-                                <SelectItem value="US-East">US East</SelectItem>
-                                <SelectItem value="EU-Central">EU Central</SelectItem>
-                                <SelectItem value="Asia-Pacific">Asia Pacific</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="grid gap-2">
-                            <Label htmlFor="cpu" className="text-gray-700">
-                              CPU Model
-                            </Label>
-                            <Select
-                              value={newMinerConfig.cpu}
-                              onValueChange={(value) => setNewMinerConfig((prev) => ({ ...prev, cpu: value }))}
-                            >
-                              <SelectTrigger className="bg-white border-gray-300 text-gray-900">
-                                <SelectValue placeholder="Select CPU" />
-                              </SelectTrigger>
-                              <SelectContent className="bg-white border-gray-200">
-                                <SelectItem value="M3 Pro">M3 Pro</SelectItem>
-                                <SelectItem value="M3 Max">M3 Max</SelectItem>
-                                <SelectItem value="M2 Ultra">M2 Ultra</SelectItem>
-                                <SelectItem value="M2 Pro">M2 Pro</SelectItem>
-                                <SelectItem value="M1">M1</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="grid gap-2">
-                              <Label htmlFor="cores" className="text-gray-700">
-                                CPU Cores
-                              </Label>
-                              <Input
-                                id="cores"
-                                type="number"
-                                value={newMinerConfig.cores}
-                                onChange={(e) => setNewMinerConfig((prev) => ({ ...prev, cores: e.target.value }))}
-                                placeholder="8"
-                                className="bg-white border-gray-300 text-gray-900"
-                              />
-                            </div>
-                            <div className="grid gap-2">
-                              <Label htmlFor="memory" className="text-gray-700">
-                                Memory
-                              </Label>
-                              <Input
-                                id="memory"
-                                value={newMinerConfig.memory}
-                                onChange={(e) => setNewMinerConfig((prev) => ({ ...prev, memory: e.target.value }))}
-                                placeholder="16GB"
-                                className="bg-white border-gray-300 text-gray-900"
-                              />
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => setShowAddMinerDialog(false)}
-                        className="bg-white border-gray-300"
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={handleAddMiner}
-                        disabled={!newMinerConfig.name.trim()}
-                        className={getThemeClasses(viewMode).button}
-                      >
-                        Add Miner
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setShowAddMinerDialog(true)}
+                className={`flex items-center gap-2 shadow-md text-sm ${getThemeClasses(viewMode).button}`}
+              >
+                <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
+                Add Miner
+              </Button>
             </div>
           </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="mac" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 bg-gray-100 border border-gray-200">
-                <TabsTrigger value="mac" className="data-[state=active]:bg-white data-[state=active]:text-gray-900">
-                  <Monitor className="w-4 h-4 mr-2 text-purple-600" />
-                  Mac Miners ({miners.mac.length})
-                </TabsTrigger>
-                <TabsTrigger value="runpod" className="data-[state=active]:bg-white data-[state=active]:text-gray-900">
-                  <Server className="w-4 h-4 mr-2 text-blue-600" />
-                  Runpod Miners ({miners.runpod.length})
-                </TabsTrigger>
+          <CardContent className="p-3 sm:p-4">
+            <Tabs defaultValue="mac" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="mac">Mac Miners</TabsTrigger>
+                <TabsTrigger value="runpod">Runpod Miners</TabsTrigger>
               </TabsList>
-
-              <TabsContent value="runpod" className="space-y-4">
-                <div className="grid gap-4">
-                  {miners.runpod.map((miner) => (
-                    <Card key={miner.id} className="bg-white border-gray-200 shadow-sm">
-                      <CardContent className="p-3 sm:p-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-                          <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <Server className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />
-                              <div className="min-w-0 flex-1">
-                                <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
-                                  {miner.name}
-                                </h3>
-                                <p className="text-xs sm:text-sm text-gray-600 truncate">
-                                  {miner.gpu} • {miner.region}
-                                </p>
+              <TabsContent value="mac">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[50px]">ID</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Hash Rate</TableHead>
+                        <TableHead>CPU</TableHead>
+                        <TableHead>Cores</TableHead>
+                        <TableHead>Memory</TableHead>
+                        <TableHead>Uptime</TableHead>
+                        <TableHead>Temperature</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {miners.mac.length > 0 ? (
+                        miners.mac.map((miner) => (
+                          <TableRow key={miner.id}>
+                            <TableCell className="font-medium">{miner.id}</TableCell>
+                            <TableCell>{miner.name}</TableCell>
+                            <TableCell>
+                              <Badge className={`${getMinerStatusBadge(miner.status)}`}>{miner.status}</Badge>
+                            </TableCell>
+                            <TableCell>{miner.hashRate}</TableCell>
+                            <TableCell>{miner.cpu}</TableCell>
+                            <TableCell>{miner.cores}</TableCell>
+                            <TableCell>{miner.memory}</TableCell>
+                            <TableCell>{miner.uptime}</TableCell>
+                            <TableCell>{miner.temperature}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center gap-2 justify-end">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleMinerAction("mac", miner.id, "start")}
+                                  disabled={miner.status === "running"}
+                                  className={`h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 ${
+                                    miner.status === "running" ? "opacity-50 cursor-not-allowed" : ""
+                                  }`}
+                                >
+                                  <Play className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleMinerAction("mac", miner.id, "stop")}
+                                  disabled={miner.status === "stopped"}
+                                  className={`h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 ${
+                                    miner.status === "stopped" ? "opacity-50 cursor-not-allowed" : ""
+                                  }`}
+                                >
+                                  <PowerOff className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleMinerAction("mac", miner.id, "restart")}
+                                  className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                >
+                                  <RefreshCw className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openSSHConfig(miner.id, "mac")}
+                                  className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                >
+                                  <Terminal className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openEditMiner("mac", miner.id)}
+                                  className="h-8 w-8 p-0 text-gray-600 hover:text-gray-700 hover:bg-gray-50"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => triggerDeleteMiner("mac", miner.id)}
+                                  className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
                               </div>
-                            </div>
-                            <Badge className={`${getMinerStatusBadge(miner.status)} border text-xs flex-shrink-0`}>
-                              {miner.status}
-                            </Badge>
-                          </div>
-                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-                            <div className="text-left sm:text-right">
-                              <div className="text-sm font-medium text-gray-900">{miner.hashRate}</div>
-                              <div className="text-xs text-gray-600">{miner.cost}</div>
-                            </div>
-                            <div className="flex items-center justify-center gap-2 flex-wrap">
-                              {/* SSH Operation Buttons */}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleSSHOperation(miner.id, "runpod", "continue")}
-                                disabled={isOperationInProgress(miner.id, "continue")}
-                                className={`bg-white ${getOperationColor("continue")} p-1.5`}
-                                title="Continue Miner"
-                              >
-                                {isOperationInProgress(miner.id, "continue") ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  getOperationIcon("continue")
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleSSHOperation(miner.id, "runpod", "refresh")}
-                                disabled={isOperationInProgress(miner.id, "refresh")}
-                                className={`bg-white ${getOperationColor("refresh")} p-1.5`}
-                                title="Refresh Miner"
-                              >
-                                {isOperationInProgress(miner.id, "refresh") ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  getOperationIcon("refresh")
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleSSHOperation(miner.id, "runpod", "stop")}
-                                disabled={isOperationInProgress(miner.id, "stop")}
-                                className={`bg-white ${getOperationColor("stop")} p-1.5`}
-                                title="Stop Miner"
-                              >
-                                {isOperationInProgress(miner.id, "stop") ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  getOperationIcon("stop")
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openSSHConfig(miner.id, "runpod")}
-                                className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 p-1.5"
-                                title="SSH Config"
-                              >
-                                <Terminal className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openEditMiner("runpod", miner.id)}
-                                className="bg-white border-blue-300 text-blue-700 hover:bg-blue-50 p-1.5"
-                                title="Edit Miner"
-                              >
-                                <Edit className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => triggerDeleteMiner("runpod", miner.id)}
-                                className="bg-white border-red-300 text-red-700 hover:bg-red-50 p-1.5"
-                                title="Remove Miner"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 sm:gap-4 mt-3 pt-3 border-t border-gray-200">
-                          <div className="text-center">
-                            <div className="text-xs sm:text-sm font-medium text-gray-900">{miner.uptime}</div>
-                            <div className="text-xs text-gray-600">Uptime</div>
-                          </div>
-                          <div className="text-center">
-                            <div
-                              className={`text-xs sm:text-sm font-medium ${miner.status === "running" ? "text-emerald-600" : "text-red-600"}`}
-                            >
-                              {miner.status === "running" ? (
-                                <Wifi className="w-3 h-3 sm:w-4 sm:h-4 mx-auto" />
-                              ) : (
-                                <WifiOff className="w-3 h-3 sm:w-4 sm:h-4 mx-auto" />
-                              )}
-                            </div>
-                            <div className="text-xs text-gray-600">Connection</div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={10} className="text-center py-4">
+                            No Mac miners found.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
                 </div>
               </TabsContent>
-
-              <TabsContent value="mac" className="space-y-4">
-                <div className="grid gap-4">
-                  {miners.mac.map((miner) => (
-                    <Card key={miner.id} className="bg-white border-gray-200 shadow-sm">
-                      <CardContent className="p-3 sm:p-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-                          <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <Monitor className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 flex-shrink-0" />
-                              <div className="min-w-0 flex-1">
-                                <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
-                                  {miner.name}
-                                </h3>
-                                <p className="text-xs sm:text-sm text-gray-600 truncate">
-                                  {miner.cpu} • {miner.cores} cores • {miner.memory}
-                                </p>
-                              </div>
-                            </div>
-                            <Badge className={`${getMinerStatusBadge(miner.status)} border text-xs flex-shrink-0`}>
-                              {miner.status}
-                            </Badge>
-                          </div>
-                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-                            <div className="text-left sm:text-right">
-                              <div className="text-sm font-medium text-gray-900">{miner.hashRate}</div>
-                              <div className="text-xs text-gray-600">Hash Rate</div>
-                            </div>
-                            <div className="flex items-center justify-center gap-2 flex-wrap">
-                              {/* SSH Operation Buttons */}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleSSHOperation(miner.id, "mac", "continue")}
-                                disabled={isOperationInProgress(miner.id, "continue")}
-                                className={`bg-white ${getOperationColor("continue")} p-1.5`}
-                                title="Continue Miner"
-                              >
-                                {isOperationInProgress(miner.id, "continue") ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  getOperationIcon("continue")
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleSSHOperation(miner.id, "mac", "refresh")}
-                                disabled={isOperationInProgress(miner.id, "refresh")}
-                                className={`bg-white ${getOperationColor("refresh")} p-1.5`}
-                                title="Refresh Miner"
-                              >
-                                {isOperationInProgress(miner.id, "refresh") ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  getOperationIcon("refresh")
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleSSHOperation(miner.id, "mac", "stop")}
-                                disabled={isOperationInProgress(miner.id, "stop")}
-                                className={`bg-white ${getOperationColor("stop")} p-1.5`}
-                                title="Stop Miner"
-                              >
-                                {isOperationInProgress(miner.id, "stop") ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  getOperationIcon("stop")
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openSSHConfig(miner.id, "mac")}
-                                className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 p-1.5"
-                                title="SSH Config"
-                              >
-                                <Terminal className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openEditMiner("mac", miner.id)}
-                                className="bg-white border-blue-300 text-blue-700 hover:bg-blue-50 p-1.5"
-                                title="Edit Miner"
-                              >
-                                <Edit className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => triggerDeleteMiner("mac", miner.id)}
-                                className="bg-white border-red-300 text-red-700 hover:bg-red-50 p-1.5"
-                                title="Remove Miner"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 sm:gap-4 mt-3 pt-3 border-t border-gray-200">
-                          <div className="text-center">
-                            <div className="text-xs sm:text-sm font-medium text-gray-900">{miner.uptime}</div>
-                            <div className="text-xs text-gray-600">Uptime</div>
-                          </div>
-                          <div className="text-center">
-                            <div
-                              className={`text-xs sm:text-sm font-medium ${miner.status === "running" ? "text-emerald-600" : "text-red-600"}`}
-                            >
-                              {miner.status === "running" ? (
-                                <Wifi className="w-3 h-3 sm:w-4 sm:h-4 mx-auto" />
-                              ) : (
-                                <WifiOff className="w-3 h-3 sm:w-4 sm:h-4 mx-auto" />
-                              )}
-                            </div>
-                            <div className="text-xs text-gray-600">Connection</div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+              <TabsContent value="runpod">
+                <div>Runpod Miners</div>
               </TabsContent>
             </Tabs>
           </CardContent>
         </Card>
 
-        {/* Edit Miner Dialog */}
-        <Dialog open={showEditMinerDialog} onOpenChange={setShowEditMinerDialog}>
-          <DialogContent className="bg-white border-gray-200">
+        {/* Dialogs */}
+        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+          <DialogContent className="bg-white border-gray-200 max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-gray-900">Edit Miner</DialogTitle>
+              <DialogTitle className="text-gray-900">Add New Passphrase</DialogTitle>
               <DialogDescription className="text-gray-600">
-                Modify the details of your {editMinerConfig.type === "runpod" ? "Runpod" : "Mac"} miner
+                Enter the passphrase and description to add to the database.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-miner-name" className="text-gray-700">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="passphrase" className="text-right">
+                  Passphrase
+                </Label>
+                <Input
+                  type="text"
+                  id="passphrase"
+                  value={newPassphrase}
+                  onChange={(e) => setNewPassphrase(e.target.value)}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="description" className="text-right">
+                  Description
+                </Label>
+                <Textarea
+                  id="description"
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="generate-ai-variations"
+                  checked={generateAIVariations}
+                  onCheckedChange={setGenerateAIVariations}
+                />
+                <Label htmlFor="generate-ai-variations" className="text-sm text-gray-700">
+                  Generate AI Variations
+                </Label>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowAddDialog(false)} className="bg-white border-gray-300">
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={handleAddPassphrase}>
+                Add
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showSSHConfigDialog} onOpenChange={setShowSSHConfigDialog}>
+          <DialogContent className="bg-white border-gray-200 max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-gray-900">SSH Configuration</DialogTitle>
+              <DialogDescription className="text-gray-600">
+                Configure the SSH settings for the selected miner.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="host" className="text-right">
+                  Host
+                </Label>
+                <Input
+                  type="text"
+                  id="host"
+                  value={sshConfig.host}
+                  onChange={(e) => setSSHConfig({ ...sshConfig, host: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="port" className="text-right">
+                  Port
+                </Label>
+                <Input
+                  type="number"
+                  id="port"
+                  value={sshConfig.port}
+                  onChange={(e) => setSSHConfig({ ...sshConfig, port: Number(e.target.value) })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="username" className="text-right">
+                  Username
+                </Label>
+                <Input
+                  type="text"
+                  id="username"
+                  value={sshConfig.username}
+                  onChange={(e) => setSSHConfig({ ...sshConfig, username: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="password" className="text-right">
+                  Password
+                </Label>
+                <Input
+                  type="password"
+                  id="password"
+                  value={sshConfig.password || ""}
+                  onChange={(e) => setSSHConfig({ ...sshConfig, password: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="privateKey" className="text-right">
+                  Private Key
+                </Label>
+                <Textarea
+                  id="privateKey"
+                  value={sshConfig.privateKey || ""}
+                  onChange={(e) => setSSHConfig({ ...sshConfig, privateKey: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="workingDirectory" className="text-right">
+                  Working Directory
+                </Label>
+                <Input
+                  type="text"
+                  id="workingDirectory"
+                  value={sshConfig.workingDirectory}
+                  onChange={(e) => setSSHConfig({ ...sshConfig, workingDirectory: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="processName" className="text-right">
+                  Process Name
+                </Label>
+                <Input
+                  type="text"
+                  id="processName"
+                  value={sshConfig.processName}
+                  onChange={(e) => setSSHConfig({ ...sshConfig, processName: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowSSHConfigDialog(false)}
+                className="bg-white border-gray-300"
+              >
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={saveSSHConfig}>
+                Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showAddMinerDialog} onOpenChange={setShowAddMinerDialog}>
+          <DialogContent className="bg-white border-gray-200 max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-gray-900">Add New Miner</DialogTitle>
+              <DialogDescription className="text-gray-600">Configure the settings for the new miner.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="minerType" className="text-right">
+                  Miner Type
+                </Label>
+                <Select value={newMinerType} onValueChange={setNewMinerType}>
+                  <SelectTrigger className="w-[180px] col-span-3">
+                    <SelectValue placeholder="Select Miner Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="runpod">Runpod</SelectItem>
+                    <SelectItem value="mac">Mac</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="minerName" className="text-right">
                   Miner Name
                 </Label>
                 <Input
-                  id="edit-miner-name"
-                  value={editMinerConfig.name}
-                  onChange={(e) => setEditMinerConfig((prev) => ({ ...prev, name: e.target.value }))}
-                  placeholder="Enter miner name..."
-                  className="bg-white border-gray-300 text-gray-900"
+                  type="text"
+                  id="minerName"
+                  value={newMinerConfig.name}
+                  onChange={(e) => setNewMinerConfig({ ...newMinerConfig, name: e.target.value })}
+                  className="col-span-3"
                 />
               </div>
-              {editMinerConfig.type === "runpod" ? (
+              {newMinerType === "runpod" ? (
                 <>
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-gpu" className="text-gray-700">
-                      GPU Model
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="gpu" className="text-right">
+                      GPU
                     </Label>
-                    <Select
-                      value={editMinerConfig.gpu}
-                      onValueChange={(value) => setEditMinerConfig((prev) => ({ ...prev, gpu: value }))}
-                    >
-                      <SelectTrigger className="bg-white border-gray-300 text-gray-900">
-                        <SelectValue placeholder="Select GPU" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white border-gray-200">
-                        <SelectItem value="RTX 4090">RTX 4090</SelectItem>
-                        <SelectItem value="RTX 4080">RTX 4080</SelectItem>
-                        <SelectItem value="RTX 3090">RTX 3090</SelectItem>
-                        <SelectItem value="RTX 3080">RTX 3080</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Input
+                      type="text"
+                      id="gpu"
+                      value={newMinerConfig.gpu}
+                      onChange={(e) => setNewMinerConfig({ ...newMinerConfig, gpu: e.target.value })}
+                      className="col-span-3"
+                    />
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-region" className="text-gray-700">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="region" className="text-right">
                       Region
                     </Label>
-                    <Select
-                      value={editMinerConfig.region}
-                      onValueChange={(value) => setEditMinerConfig((prev) => ({ ...prev, region: value }))}
-                    >
-                      <SelectTrigger className="bg-white border-gray-300 text-gray-900">
-                        <SelectValue placeholder="Select region" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white border-gray-200">
-                        <SelectItem value="US-West">US West</SelectItem>
-                        <SelectItem value="US-East">US East</SelectItem>
-                        <SelectItem value="EU-Central">EU Central</SelectItem>
-                        <SelectItem value="Asia-Pacific">Asia Pacific</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Input
+                      type="text"
+                      id="region"
+                      value={newMinerConfig.region}
+                      onChange={(e) => setNewMinerConfig({ ...newMinerConfig, region: e.target.value })}
+                      className="col-span-3"
+                    />
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-cpu" className="text-gray-700">
-                      CPU Model
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="cpu" className="text-right">
+                      CPU
                     </Label>
-                    <Select
-                      value={editMinerConfig.cpu}
-                      onValueChange={(value) => setEditMinerConfig((prev) => ({ ...prev, cpu: value }))}
-                    >
-                      <SelectTrigger className="bg-white border-gray-300 text-gray-900">
-                        <SelectValue placeholder="Select CPU" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white border-gray-200">
-                        <SelectItem value="M3 Pro">M3 Pro</SelectItem>
-                        <SelectItem value="M3 Max">M3 Max</SelectItem>
-                        <SelectItem value="M2 Ultra">M2 Ultra</SelectItem>
-                        <SelectItem value="M2 Pro">M2 Pro</SelectItem>
-                        <SelectItem value="M1">M1</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Input
+                      type="text"
+                      id="cpu"
+                      value={newMinerConfig.cpu}
+                      onChange={(e) => setNewMinerConfig({ ...newMinerConfig, cpu: e.target.value })}
+                      className="col-span-3"
+                    />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="grid gap-2">
-                      <Label htmlFor="edit-cores" className="text-gray-700">
-                        CPU Cores
-                      </Label>
-                      <Input
-                        id="edit-cores"
-                        type="number"
-                        value={editMinerConfig.cores}
-                        onChange={(e) => setEditMinerConfig((prev) => ({ ...prev, cores: e.target.value }))}
-                        placeholder="8"
-                        className="bg-white border-gray-300 text-gray-900"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="edit-memory" className="text-gray-700">
-                        Memory
-                      </Label>
-                      <Input
-                        id="edit-memory"
-                        value={editMinerConfig.memory}
-                        onChange={(e) => setEditMinerConfig((prev) => ({ ...prev, memory: e.target.value }))}
-                        placeholder="16GB"
-                        className="bg-white border-gray-300 text-gray-900"
-                      />
-                    </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="cores" className="text-right">
+                      Cores
+                    </Label>
+                    <Input
+                      type="number"
+                      id="cores"
+                      value={newMinerConfig.cores}
+                      onChange={(e) => setNewMinerConfig({ ...newMinerConfig, cores: e.target.value })}
+                      className="col-span-3"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="memory" className="text-right">
+                      Memory
+                    </Label>
+                    <Input
+                      type="text"
+                      id="memory"
+                      value={newMinerConfig.memory}
+                      onChange={(e) => setNewMinerConfig({ ...newMinerConfig, memory: e.target.value })}
+                      className="col-span-3"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowAddMinerDialog(false)}
+                className="bg-white border-gray-300"
+              >
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={handleAddMiner}>
+                Add
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showEditMinerDialog} onOpenChange={setShowEditMinerDialog}>
+          <DialogContent className="bg-white border-gray-200 max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-gray-900">Edit Miner</DialogTitle>
+              <DialogDescription className="text-gray-600">Edit the settings for the selected miner.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="minerName" className="text-right">
+                  Miner Name
+                </Label>
+                <Input
+                  type="text"
+                  id="minerName"
+                  value={editMinerConfig.name}
+                  onChange={(e) => setEditMinerConfig({ ...editMinerConfig, name: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              {editMinerConfig.type === "runpod" ? (
+                <>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="gpu" className="text-right">
+                      GPU
+                    </Label>
+                    <Input
+                      type="text"
+                      id="gpu"
+                      value={editMinerConfig.gpu}
+                      onChange={(e) => setEditMinerConfig({ ...editMinerConfig, gpu: e.target.value })}
+                      className="col-span-3"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="region" className="text-right">
+                      Region
+                    </Label>
+                    <Input
+                      type="text"
+                      id="region"
+                      value={editMinerConfig.region}
+                      onChange={(e) => setEditMinerConfig({ ...editMinerConfig, region: e.target.value })}
+                      className="col-span-3"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="cpu" className="text-right">
+                      CPU
+                    </Label>
+                    <Input
+                      type="text"
+                      id="cpu"
+                      value={editMinerConfig.cpu}
+                      onChange={(e) => setEditMinerConfig({ ...editMinerConfig, cpu: e.target.value })}
+                      className="col-span-3"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="cores" className="text-right">
+                      Cores
+                    </Label>
+                    <Input
+                      type="number"
+                      id="cores"
+                      value={editMinerConfig.cores}
+                      onChange={(e) => setEditMinerConfig({ ...editMinerConfig, cores: e.target.value })}
+                      className="col-span-3"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="memory" className="text-right">
+                      Memory
+                    </Label>
+                    <Input
+                      type="text"
+                      id="memory"
+                      value={editMinerConfig.memory}
+                      onChange={(e) => setEditMinerConfig({ ...editMinerConfig, memory: e.target.value })}
+                      className="col-span-3"
+                    />
                   </div>
                 </>
               )}
@@ -2799,199 +2454,152 @@ export default function Component() {
               >
                 Cancel
               </Button>
-              <Button
-                onClick={handleEditMiner}
-                disabled={!editMinerConfig.name.trim()}
-                className={getThemeClasses(viewMode).button}
-              >
-                Save Changes
+              <Button variant="primary" onClick={handleEditMiner}>
+                Save
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        {/* SSH Configuration Dialog */}
-        <Dialog open={showSSHConfigDialog} onOpenChange={setShowSSHConfigDialog}>
-          <DialogContent className="bg-white border-gray-200 max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="text-gray-900 flex items-center gap-2">
-                <Terminal className="w-5 h-5 text-blue-600" />
-                SSH Configuration - {selectedMinerForSSH?.name}
-              </DialogTitle>
-              <DialogDescription className="text-gray-600">
-                Configure SSH connection settings for remote miner operations
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="ssh-host" className="text-gray-700">
-                    Host/IP Address
-                  </Label>
-                  <Input
-                    id="ssh-host"
-                    value={sshConfig.host}
-                    onChange={(e) => setSSHConfig((prev) => ({ ...prev, host: e.target.value }))}
-                    placeholder="192.168.1.100 or hostname"
-                    className="bg-white border-gray-300 text-gray-900"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="ssh-port" className="text-gray-700">
-                    Port
-                  </Label>
-                  <Input
-                    id="ssh-port"
-                    type="number"
-                    value={sshConfig.port}
-                    onChange={(e) => setSSHConfig((prev) => ({ ...prev, port: Number.parseInt(e.target.value) || 22 }))}
-                    placeholder="22"
-                    className="bg-white border-gray-300 text-gray-900"
-                  />
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="ssh-username" className="text-gray-700">
-                  Username
-                </Label>
-                <Input
-                  id="ssh-username"
-                  value={sshConfig.username}
-                  onChange={(e) => setSSHConfig((prev) => ({ ...prev, username: e.target.value }))}
-                  placeholder="root or admin"
-                  className="bg-white border-gray-300 text-gray-900"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="ssh-password" className="text-gray-700">
-                  Password (Optional - use private key for better security)
-                </Label>
-                <Input
-                  id="ssh-password"
-                  type="password"
-                  value={sshConfig.password}
-                  onChange={(e) => setSSHConfig((prev) => ({ ...prev, password: e.target.value }))}
-                  placeholder="SSH password"
-                  className="bg-white border-gray-300 text-gray-900"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="ssh-private-key" className="text-gray-700">
-                  Private Key (Recommended)
-                </Label>
-                <Textarea
-                  id="ssh-private-key"
-                  value={sshConfig.privateKey}
-                  onChange={(e) => setSSHConfig((prev) => ({ ...prev, privateKey: e.target.value }))}
-                  placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
-                  className="bg-white border-gray-300 text-gray-900 font-mono text-sm"
-                  rows={4}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="ssh-working-dir" className="text-gray-700">
-                  Working Directory
-                </Label>
-                <Input
-                  id="ssh-working-dir"
-                  value={sshConfig.workingDirectory}
-                  onChange={(e) => setSSHConfig((prev) => ({ ...prev, workingDirectory: e.target.value }))}
-                  placeholder="/home/user/miner"
-                  className="bg-white border-gray-300 text-gray-900"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="ssh-process-name" className="text-gray-700">
-                  Process Name
-                </Label>
-                <Input
-                  id="ssh-process-name"
-                  value={sshConfig.processName}
-                  onChange={(e) => setSSHConfig((prev) => ({ ...prev, processName: e.target.value }))}
-                  placeholder="bip38_miner"
-                  className="bg-white border-gray-300 text-gray-900"
-                />
-              </div>
-
-              {/* SSH Commands Preview */}
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <h4 className="font-medium text-gray-900 mb-2">SSH Commands Preview</h4>
-                <div className="space-y-2 text-sm font-mono">
-                  <div>
-                    <span className="text-green-600">Continue:</span>{" "}
-                    <span className="text-gray-700">
-                      cd {sshConfig.workingDirectory} && ./{sshConfig.processName} --resume
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-amber-600">Refresh:</span>{" "}
-                    <span className="text-gray-700">
-                      cd {sshConfig.workingDirectory} && pkill {sshConfig.processName} && ./{sshConfig.processName}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-red-600">Stop:</span>{" "}
-                    <span className="text-gray-700">pkill {sshConfig.processName}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setShowSSHConfigDialog(false)}
-                className="bg-white border-gray-300"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={saveSSHConfig}
-                disabled={!sshConfig.host || !sshConfig.username}
-                className={getThemeClasses(viewMode).button}
-              >
-                Save Configuration
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Delete Confirmation Dialog */}
         <Dialog
           open={deleteConfirmDialog.show}
-          onOpenChange={(open) => setDeleteConfirmDialog((prev) => ({ ...prev, show: open }))}
+          onOpenChange={(open) => setDeleteConfirmDialog({ ...deleteConfirmDialog, show: open })}
         >
-          <DialogContent className="bg-white border-gray-200">
+          <DialogContent className="bg-white border-gray-200 max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-gray-900 flex items-center gap-2">
-                <Trash2 className="w-5 h-5 text-red-600" />
-                Remove Miner
-              </DialogTitle>
+              <DialogTitle className="text-gray-900">Confirm Delete</DialogTitle>
               <DialogDescription className="text-gray-600">
-                Are you sure you want to remove "{deleteConfirmDialog.minerName}"? This action cannot be undone.
+                Are you sure you want to delete {deleteConfirmDialog.minerName}? This action cannot be undone.
               </DialogDescription>
             </DialogHeader>
-            <div className="py-4">
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <div className="flex items-center gap-2 text-red-700 text-sm">
-                  <Trash2 className="w-4 h-4" />
-                  <span className="font-medium">Warning:</span>
-                </div>
-                <p className="text-red-600 text-sm mt-1">
-                  Removing this miner will stop all current operations and remove it from your fleet permanently.
-                </p>
-              </div>
-            </div>
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => setDeleteConfirmDialog((prev) => ({ ...prev, show: false }))}
+                onClick={() => setDeleteConfirmDialog({ ...deleteConfirmDialog, show: false })}
                 className="bg-white border-gray-300"
               >
                 Cancel
               </Button>
-              <Button onClick={deleteMiner} className="bg-red-600 hover:bg-red-700 text-white">
-                <Trash2 className="w-4 h-4 mr-2" />
-                Remove Miner
+              <Button variant="destructive" onClick={confirmDeleteMiner}>
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showLLMConfig} onOpenChange={setShowLLMConfig}>
+          <DialogContent className="bg-white border-gray-200 max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-gray-900">LLM Configuration</DialogTitle>
+              <DialogDescription className="text-gray-600">Configure the settings for the LLM.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="provider" className="text-right">
+                  Provider
+                </Label>
+                <Select
+                  value={llmConfig.provider}
+                  onValueChange={(value) => setLLMConfig({ ...llmConfig, provider: value as "openai" })}
+                >
+                  <SelectTrigger className="w-[180px] col-span-3">
+                    <SelectValue placeholder="Select Provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="openai">OpenAI</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="apiKey" className="text-right">
+                  API Key
+                </Label>
+                <Input
+                  type="text"
+                  id="apiKey"
+                  value={llmConfig.apiKey}
+                  onChange={(e) => setLLMConfig({ ...llmConfig, apiKey: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="model" className="text-right">
+                  Model
+                </Label>
+                <Input
+                  type="text"
+                  id="model"
+                  value={llmConfig.model}
+                  onChange={(e) => setLLMConfig({ ...llmConfig, model: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="temperature" className="text-right">
+                  Temperature
+                </Label>
+                <Input
+                  type="number"
+                  id="temperature"
+                  value={llmConfig.temperature}
+                  onChange={(e) => setLLMConfig({ ...llmConfig, temperature: Number(e.target.value) })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="minWords" className="text-right">
+                  Min Words
+                </Label>
+                <Input
+                  type="number"
+                  id="minWords"
+                  value={llmConfig.minWords}
+                  onChange={(e) => setLLMConfig({ ...llmConfig, minWords: Number(e.target.value) })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="maxWords" className="text-right">
+                  Max Words
+                </Label>
+                <Input
+                  type="number"
+                  id="maxWords"
+                  value={llmConfig.maxWords}
+                  onChange={(e) => setLLMConfig({ ...llmConfig, maxWords: Number(e.target.value) })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="phrasesPerRow" className="text-right">
+                  Phrases Per Row
+                </Label>
+                <Input
+                  type="number"
+                  id="phrasesPerRow"
+                  value={llmConfig.phrasesPerRow}
+                  onChange={(e) => setLLMConfig({ ...llmConfig, phrasesPerRow: Number(e.target.value) })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="seedWords" className="text-right">
+                  Seed Words
+                </Label>
+                <Textarea
+                  id="seedWords"
+                  value={llmConfig.seedWords}
+                  onChange={(e) => setLLMConfig({ ...llmConfig, seedWords: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowLLMConfig(false)} className="bg-white border-gray-300">
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={() => setShowLLMConfig(false)}>
+                Save
               </Button>
             </DialogFooter>
           </DialogContent>
