@@ -3,20 +3,21 @@ import { Client } from "ssh2"
 
 export async function POST(request: NextRequest) {
   try {
-    const { searchTerm } = await request.json()
+    const { searchTerm, offset = 0 } = await request.json()
 
     if (!searchTerm || searchTerm.trim() === "") {
       return NextResponse.json({
         success: true,
         passphrases: [],
+        hasMore: false,
       })
     }
 
-    console.log("[v0] Starting SSH search for term:", searchTerm)
+    console.log("[v0] Starting SSH search for term:", searchTerm, "offset:", offset)
 
     const sshClient = new Client()
 
-    const searchResults = await new Promise<any[]>((resolve, reject) => {
+    const searchResults = await new Promise<{ passphrases: any[]; hasMore: boolean }>((resolve, reject) => {
       const timeout = setTimeout(() => {
         sshClient.end()
         reject(new Error("SSH connection timeout"))
@@ -26,8 +27,7 @@ export async function POST(request: NextRequest) {
         console.log("[v0] SSH connection established for search")
         clearTimeout(timeout)
 
-        // SQL query to search jobs table with confirmed and available filters
-        const sqlQuery = `psql -d btcr_prod -t -c "SELECT id, password FROM btcr.jobs WHERE password ILIKE '%${searchTerm.replace(/'/g, "''")}%' AND confirmed = true AND is_available = true LIMIT 100;"`
+        const sqlQuery = `psql -d btcr_prod -t -c "SELECT id, password FROM btcr.jobs WHERE password ILIKE '%${searchTerm.replace(/'/g, "''")}%' AND confirmed = true AND is_available = true LIMIT 201 OFFSET ${offset};"`
 
         sshClient.exec(sqlQuery, (err, stream) => {
           if (err) {
@@ -49,13 +49,15 @@ export async function POST(request: NextRequest) {
                 .trim()
                 .split("\n")
                 .filter((line) => line.trim())
-              const passphrases = lines.map((line, index) => {
+
+              const hasMore = lines.length > 200
+              const passphrases = lines.slice(0, 200).map((line, index) => {
                 const parts = line.trim().split("|")
                 const id = parts[0]?.trim()
                 const password = parts[1]?.trim()
 
                 return {
-                  id: `search-${id || index}`,
+                  id: `search-${id || offset + index}`,
                   passphrase: password || line.trim(),
                   description: "Found in database",
                   status: "completed",
@@ -64,8 +66,8 @@ export async function POST(request: NextRequest) {
                 }
               })
 
-              console.log("[v0] Found", passphrases.length, "matching passphrases")
-              resolve(passphrases)
+              console.log("[v0] Found", passphrases.length, "matching passphrases, hasMore:", hasMore)
+              resolve({ passphrases, hasMore })
             } else {
               console.log("[v0] SSH command failed with error:", errorOutput)
               reject(new Error(`Database query failed: ${errorOutput}`))
@@ -101,7 +103,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      passphrases: searchResults,
+      passphrases: searchResults.passphrases,
+      hasMore: searchResults.hasMore,
     })
   } catch (error) {
     console.error("[v0] Search error:", error)
@@ -109,6 +112,7 @@ export async function POST(request: NextRequest) {
       success: false,
       error: error instanceof Error ? error.message : "Search failed",
       passphrases: [],
+      hasMore: false,
     })
   }
 }

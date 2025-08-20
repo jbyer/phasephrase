@@ -461,38 +461,67 @@ export default function Component() {
 
   const [isSearching, setIsSearching] = useState(false)
   const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searchOffset, setSearchOffset] = useState(0)
+  const [hasMoreResults, setHasMoreResults] = useState(false)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
 
-  const handleDatabaseSearch = async () => {
+  const handleDatabaseSearch = async (loadMore = false) => {
     if (!searchTerm.trim()) {
       setSearchResults([])
+      setSearchOffset(0)
+      setHasMoreResults(false)
       return
     }
 
-    setIsSearching(true)
+    if (loadMore) {
+      setIsLoadingMore(true)
+    } else {
+      setIsSearching(true)
+      setSearchOffset(0)
+    }
+
     try {
-      console.log("[v0] Initiating database search for:", searchTerm)
+      const currentOffset = loadMore ? searchOffset : 0
+      console.log("[v0] Initiating database search for:", searchTerm, "offset:", currentOffset)
       const response = await fetch("/api/search-jobs", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ searchTerm }),
+        body: JSON.stringify({ searchTerm, offset: currentOffset }),
       })
 
       const data = await response.json()
 
       if (data.success) {
         console.log("[v0] Database search completed, found:", data.passphrases.length, "results")
-        setSearchResults(data.passphrases)
+        if (loadMore) {
+          setSearchResults((prev) => [...prev, ...data.passphrases])
+          setSearchOffset((prev) => prev + 200)
+        } else {
+          setSearchResults(data.passphrases)
+          setSearchOffset(200)
+        }
+        setHasMoreResults(data.hasMore || false)
       } else {
         console.error("[v0] Database search failed:", data.error)
-        setSearchResults([])
+        if (!loadMore) {
+          setSearchResults([])
+          setHasMoreResults(false)
+        }
       }
     } catch (error) {
       console.error("[v0] Database search error:", error)
-      setSearchResults([])
+      if (!loadMore) {
+        setSearchResults([])
+        setHasMoreResults(false)
+      }
     } finally {
-      setIsSearching(false)
+      if (loadMore) {
+        setIsLoadingMore(false)
+      } else {
+        setIsSearching(false)
+      }
     }
   }
 
@@ -2290,26 +2319,27 @@ export default function Component() {
                     <div className="text-base sm:text-lg font-semibold text-gray-900">{searchResults.length}</div>
                     <div className="text-xs text-gray-600">Database</div>
                   </div>
-
-                  <div className="text-center p-2 sm:p-3 bg-amber-50 rounded-lg border border-amber-200">
-                    <div className="text-base sm:text-lg font-semibold text-amber-700">
-                      {passphrases.filter((p) => p.status === "pending").length}
-                    </div>
-                    <div className="text-xs text-gray-600">Pending</div>
-                  </div>
-                  <div className="text-center p-2 sm:p-3 bg-emerald-50 rounded-lg border border-emerald-200">
-                    <div className="text-base sm:text-lg font-semibold text-emerald-700">
-                      {passphrases.filter((p) => p.status === "completed").length}
-                    </div>
-                    <div className="text-xs text-gray-600">Completed</div>
-                  </div>
-                  <div className="text-center p-2 sm:p-3 bg-red-50 rounded-lg border border-red-200">
-                    <div className="text-base sm:text-lg font-semibold text-red-700">
-                      {passphrases.filter((p) => p.status === "failed").length}
-                    </div>
-                    <div className="text-xs text-gray-600">Failed</div>
-                  </div>
                 </div>
+
+                {hasMoreResults && searchResults.length > 0 && (
+                  <div className="flex justify-center mt-4">
+                    <Button
+                      onClick={() => handleDatabaseSearch(true)}
+                      disabled={isLoadingMore}
+                      variant="outline"
+                      className="px-6 py-2"
+                    >
+                      {isLoadingMore ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                          Loading More...
+                        </>
+                      ) : (
+                        `Load More Results (${searchResults.length} shown)`
+                      )}
+                    </Button>
+                  </div>
+                )}
 
                 {/* Passphrase Table */}
                 <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
