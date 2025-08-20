@@ -445,7 +445,8 @@ export default function Component() {
 
   const [llmConfig, setLLMConfig] = useState<LLMConfig>({
     provider: "openai",
-    apiKey: "",
+    apiKey:
+      "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",
     model: "gpt-3.5-turbo",
     temperature: 0.7,
     minWords: 3,
@@ -1568,7 +1569,6 @@ export default function Component() {
             </CardHeader>
             <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
               <div className="text-xl sm:text-2xl font-bold text-gray-900">
-                
                 {realTimeActiveMiners !== null ? realTimeActiveMiners : dashboardData.minersWorking}
               </div>
               <p className="text-xs text-gray-600 mt-1">Currently processing</p>

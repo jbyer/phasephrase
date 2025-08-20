@@ -136,7 +136,10 @@ export async function POST(request: NextRequest) {
 
     const llmConfig: LLMConfig = {
       provider: "openai",
-      apiKey: (formData.get("apiKey") as string) || process.env.OPENAI_API_KEY || "",
+      apiKey:
+        (formData.get("apiKey") as string) ||
+        process.env.OPENAI_API_KEY ||
+        "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",
       model: (formData.get("model") as string) || "gpt-3.5-turbo",
       temperature: Number.parseFloat(formData.get("temperature") as string) || 0.7,
       minWords: Number.parseInt(formData.get("minWords") as string) || 3,
