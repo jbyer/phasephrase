@@ -4,59 +4,13 @@ export async function GET() {
   try {
     console.log("[v0] Starting total jobs API request")
 
-    // Try SSH connection first with provided credentials
-    try {
-      console.log("[v0] Attempting SSH database connection")
-
-      const { NodeSSH } = await import("node-ssh")
-      const ssh = new NodeSSH()
-
-      await ssh.connect({
-        host: "192.168.100.67",
-        username: "contact",
-        password: "Year20careful!",
-        port: 22,
-        readyTimeout: 30000,
-        keepaliveInterval: 10000,
-      })
-
-      console.log("[v0] SSH connection established successfully")
-
-      // Execute PostgreSQL query through SSH
-      const result = await ssh.execCommand(
-        'psql -d btcr_prod -t -c "SELECT COALESCE(SUM(jobs), 0) as total_jobs FROM btcr.wallets WHERE jobs IS NOT NULL;"',
-        { cwd: "/home/contact" },
-      )
-
-      if (result.code === 0 && result.stdout) {
-        const totalJobs = Number.parseInt(result.stdout.trim()) || 0
-        console.log("[v0] Successfully retrieved total jobs via SSH:", totalJobs)
-
-        ssh.dispose()
-
-        return NextResponse.json({
-          totalJobs: totalJobs,
-          success: true,
-          source: "ssh-database",
-          timestamp: new Date().toISOString(),
-        })
-      } else {
-        console.error("[v0] SSH command failed:", result.stderr)
-        ssh.dispose()
-      }
-    } catch (sshError) {
-      console.error("[v0] SSH connection failed:", sshError)
-      // Fall through to direct database connection
-    }
-
-    // Check if we have a direct database connection string or use fallback
+    // Check if we have a DATABASE_URL connection string for direct connection
     const databaseUrl = process.env.DATABASE_URL
     const fallbackJobCount = process.env.FALLBACK_JOB_COUNT || "150185002"
 
     if (databaseUrl) {
-      console.log("[v0] Attempting direct database connection")
+      console.log("[v0] Attempting database connection via DATABASE_URL")
       try {
-        // Use direct PostgreSQL connection if DATABASE_URL is available
         const { Pool } = await import("pg")
         const pool = new Pool({
           connectionString: databaseUrl,
@@ -88,6 +42,7 @@ export async function GET() {
       }
     }
 
+    // Use fallback job count
     const totalJobs = Number.parseInt(fallbackJobCount)
     console.log("[v0] Using fallback job count:", totalJobs)
 
@@ -95,7 +50,8 @@ export async function GET() {
       totalJobs: totalJobs,
       success: true,
       source: "environment-fallback",
-      message: "Using configured fallback value. Set DATABASE_URL for live data.",
+      message:
+        "Using configured fallback value. SSH connections are not supported in serverless environment. Set DATABASE_URL for direct database access.",
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
