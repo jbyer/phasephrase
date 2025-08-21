@@ -650,6 +650,7 @@ export default function Component() {
             worker.state === "running" ? `${Math.floor(Math.random() * 8)}h ${Math.floor(Math.random() * 60)}m` : "0m",
           temperature: worker.state === "running" ? `${40 + Math.floor(Math.random() * 15)}°C` : "35°C",
           heartbeat: worker.heartbeat,
+          wallet_id: worker.wallet_id || 1,
           sshConfig: {
             host: "192.168.100.67",
             port: 22,
@@ -1453,9 +1454,9 @@ export default function Component() {
     if (worker) {
       setEditWorkerConfig({
         id: workerId,
-        name: worker.name,
-        state: worker.state,
-        wallet_id: worker.wallet_id.toString(),
+        name: worker.name || `Database Worker ${workerId}`,
+        state: worker.state || "idle",
+        wallet_id: worker.wallet_id ? worker.wallet_id.toString() : "1",
       })
       setShowEditWorkerDialog(true)
     }
