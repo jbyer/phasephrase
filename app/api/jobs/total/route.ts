@@ -1,15 +1,77 @@
 import { NextResponse } from "next/server"
-import { Client } from "ssh2"
 
-function executeSSHQuery(): Promise<number> {
+export async function GET() {
+  try {
+    console.log("[v0] Starting total jobs API request")
+
+    // Check if SSH2 is available
+    let Client
+    try {
+      const ssh2 = await import("ssh2")
+      Client = ssh2.Client
+      console.log("[v0] SSH2 library loaded successfully")
+    } catch (importError) {
+      console.error("[v0] Failed to import SSH2 library:", importError)
+      return NextResponse.json({
+        totalJobs: 150185002,
+        success: false,
+        source: "fallback",
+        error: "SSH library not available",
+        details: importError instanceof Error ? importError.message : "Import failed",
+        timestamp: new Date().toISOString(),
+      })
+    }
+
+    // Execute SSH query with comprehensive error handling
+    const totalJobs = await executeSSHQuery(Client)
+    console.log("[v0] Successfully retrieved total jobs:", totalJobs)
+
+    return NextResponse.json({
+      totalJobs: totalJobs,
+      success: true,
+      source: "ssh-database",
+      timestamp: new Date().toISOString(),
+    })
+  } catch (error) {
+    console.error("[v0] Unhandled error in jobs/total API:", error)
+
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    console.log("[v0] Returning fallback data due to error:", errorMessage)
+
+    return NextResponse.json({
+      totalJobs: 150185002,
+      success: false,
+      source: "fallback",
+      error: "API execution failed",
+      details: errorMessage,
+      timestamp: new Date().toISOString(),
+    })
+  }
+}
+
+function executeSSHQuery(Client: any): Promise<number> {
   return new Promise((resolve, reject) => {
-    const sshClient = new Client()
+    let sshClient
     let isResolved = false
+
+    try {
+      sshClient = new Client()
+      console.log("[v0] SSH client created successfully")
+    } catch (clientError) {
+      console.error("[v0] Failed to create SSH client:", clientError)
+      reject(new Error(`SSH client creation failed: ${clientError}`))
+      return
+    }
 
     const timeout = setTimeout(() => {
       if (!isResolved) {
         isResolved = true
-        sshClient.end()
+        console.log("[v0] SSH operation timed out")
+        try {
+          sshClient?.end()
+        } catch (e) {
+          console.error("[v0] Error ending SSH client on timeout:", e)
+        }
         reject(new Error("SSH connection timeout after 15 seconds"))
       }
     }, 15000)
@@ -25,7 +87,7 @@ function executeSSHQuery(): Promise<number> {
           if (!isResolved) {
             isResolved = true
             clearTimeout(timeout)
-            reject(err)
+            reject(new Error(`SSH command failed: ${err.message}`))
           }
           return
         }
@@ -35,7 +97,11 @@ function executeSSHQuery(): Promise<number> {
 
         stream.on("close", (code: number) => {
           console.log("[v0] SSH command completed with code:", code)
-          sshClient.end()
+          try {
+            sshClient.end()
+          } catch (e) {
+            console.error("[v0] Error ending SSH client:", e)
+          }
 
           if (!isResolved) {
             isResolved = true
@@ -55,7 +121,7 @@ function executeSSHQuery(): Promise<number> {
           output += data.toString()
         })
 
-        stream.stderr.on("data", (data: Buffer) => {
+        stream.stderr?.on("data", (data: Buffer) => {
           errorOutput += data.toString()
           console.error("[v0] SSH command stderr:", data.toString())
         })
@@ -67,51 +133,27 @@ function executeSSHQuery(): Promise<number> {
       if (!isResolved) {
         isResolved = true
         clearTimeout(timeout)
-        reject(err)
+        reject(new Error(`SSH connection failed: ${err.message}`))
       }
     })
 
-    console.log("[v0] Connecting to SSH server 192.168.100.67...")
-    sshClient.connect({
-      host: "192.168.100.67",
-      port: 22,
-      username: "contact",
-      password: "Year20careful!",
-      readyTimeout: 15000,
-      keepaliveInterval: 30000,
-    })
+    try {
+      console.log("[v0] Connecting to SSH server 192.168.100.67...")
+      sshClient.connect({
+        host: "192.168.100.67",
+        port: 22,
+        username: "contact",
+        password: "Year20careful!",
+        readyTimeout: 15000,
+        keepaliveInterval: 30000,
+      })
+    } catch (connectError) {
+      console.error("[v0] SSH connect call failed:", connectError)
+      if (!isResolved) {
+        isResolved = true
+        clearTimeout(timeout)
+        reject(new Error(`SSH connect failed: ${connectError}`))
+      }
+    }
   })
-}
-
-export async function GET() {
-  try {
-    console.log("[v0] Starting SSH database query process")
-
-    const totalJobs = await executeSSHQuery()
-    console.log("[v0] Successfully retrieved total jobs:", totalJobs)
-
-    return NextResponse.json({
-      totalJobs: totalJobs,
-      success: true,
-      source: "ssh-database",
-      timestamp: new Date().toISOString(),
-    })
-  } catch (error) {
-    console.error("[v0] Error in SSH database operation:", error)
-
-    const errorMessage = error instanceof Error ? error.message : "Unknown error"
-    console.log("[v0] Returning fallback data due to error:", errorMessage)
-
-    return NextResponse.json(
-      {
-        totalJobs: 150185002,
-        success: false,
-        source: "fallback",
-        error: "SSH/Database connection failed",
-        details: errorMessage,
-        timestamp: new Date().toISOString(),
-      },
-      { status: 200 },
-    )
-  }
 }
