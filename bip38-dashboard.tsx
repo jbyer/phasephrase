@@ -33,16 +33,14 @@ import {
   AlertCircle,
   CheckCircle,
   X,
-  Terminal,
-  Loader2,
-  Edit,
 } from "lucide-react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Server, Monitor, Wifi, WifiOff, RefreshCw, PowerOff } from "lucide-react"
+import { RefreshCw, PowerOff } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Monitor, Server } from "lucide-react"
 
 // File upload types and interfaces
 interface UploadedFile {
@@ -465,6 +463,8 @@ export default function Component() {
   const [hasMoreResults, setHasMoreResults] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
 
+  const [realTimeRemainingPassphrases, setRealTimeRemainingPassphrases] = useState<number | null>(null)
+
   const handleDatabaseSearch = async (loadMore = false) => {
     if (!searchTerm.trim()) {
       setSearchResults([])
@@ -587,6 +587,21 @@ export default function Component() {
     }
   }, [])
 
+  const fetchRemainingPassphrases = async () => {
+    try {
+      const response = await fetch("/api/passphrases/remaining")
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      const data = await response.json()
+      setRealTimeRemainingPassphrases(data.remainingPassphrases)
+      console.log("[v0] Remaining passphrases updated:", data.remainingPassphrases)
+    } catch (error) {
+      console.error("[v0] Error fetching remaining passphrases:", error)
+      setRealTimeRemainingPassphrases(null)
+    }
+  }
+
   useEffect(() => {
     setIsMounted(true)
     setCurrentTime(new Date())
@@ -594,22 +609,17 @@ export default function Component() {
 
   useEffect(() => {
     fetchTotalJobs()
-
-    // Refresh total jobs every 60 seconds
-    const interval = setInterval(fetchTotalJobs, 60000)
-
-    return () => clearInterval(interval)
-  }, [fetchTotalJobs])
-
-  useEffect(() => {
-    // Initial fetch
     fetchActiveMiners()
+    fetchRemainingPassphrases()
 
-    // Set up interval for periodic updates (every 30 seconds)
-    const interval = setInterval(fetchActiveMiners, 30000)
+    const interval = setInterval(() => {
+      fetchTotalJobs()
+      fetchActiveMiners()
+      fetchRemainingPassphrases()
+    }, 30000) // Update every 30 seconds
 
     return () => clearInterval(interval)
-  }, [fetchActiveMiners])
+  }, [])
 
   // Handle real-time updates only on client side
   useEffect(() => {
@@ -1726,9 +1736,14 @@ export default function Component() {
             </CardHeader>
             <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
               <div className="text-xl sm:text-2xl font-bold text-gray-900">
-                {dashboardData.passphrasesToRun.toLocaleString()}
+                {(realTimeRemainingPassphrases !== null
+                  ? realTimeRemainingPassphrases
+                  : dashboardData.passphrasesToRun
+                ).toLocaleString()}
               </div>
-              <p className="text-xs text-gray-600 mt-1">Queued for processing</p>
+              <p className="text-xs text-gray-600 mt-1">
+                {realTimeRemainingPassphrases !== null ? "From database" : "Queued for processing"}
+              </p>
               <Progress value={progressPercentage} className="mt-2 h-2" />
               <p className="text-xs text-gray-600 mt-1">{progressPercentage.toFixed(1)}% complete</p>
             </CardContent>
@@ -2430,20 +2445,20 @@ export default function Component() {
                   Control and monitor your Runpod and Mac miners via SSH
                 </CardDescription>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Dialog open={showAddMinerDialog} onOpenChange={setShowAddMinerDialog}>
                   <DialogTrigger asChild>
-                    <Button className={`flex items-center gap-2 ${getThemeClasses(viewMode).button} shadow-md`}>
-                      <Plus className="w-4 h-4" />
+                    <Button
+                      className={`flex items-center gap-1 sm:gap-2 ${getThemeClasses(viewMode).button} shadow-md text-xs sm:text-sm`}
+                    >
+                      <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
                       Add Miner
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="bg-white border-gray-200">
                     <DialogHeader>
                       <DialogTitle className="text-gray-900">Add New Miner</DialogTitle>
-                      <DialogDescription className="text-gray-600">
-                        Add a new Runpod or Mac miner to your fleet
-                      </DialogDescription>
+                      <DialogDescription className="text-gray-600">Add a new miner to your fleet</DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                       <div className="grid gap-2">
@@ -2451,7 +2466,7 @@ export default function Component() {
                           Miner Type
                         </Label>
                         <Select value={newMinerType} onValueChange={setNewMinerType}>
-                          <SelectTrigger className="bg-white border-gray-300 text-gray-900">
+                          <SelectTrigger className="bg-white border-gray-300">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="bg-white border-gray-200">
@@ -2462,122 +2477,77 @@ export default function Component() {
                       </div>
                       <div className="grid gap-2">
                         <Label htmlFor="miner-name" className="text-gray-700">
-                          Miner Name
+                          Name
                         </Label>
                         <Input
                           id="miner-name"
                           value={newMinerConfig.name}
                           onChange={(e) => setNewMinerConfig((prev) => ({ ...prev, name: e.target.value }))}
                           placeholder="Enter miner name..."
-                          className="bg-white border-gray-300 text-gray-900"
+                          className="bg-white border-gray-300"
                         />
                       </div>
                       {newMinerType === "runpod" ? (
                         <>
                           <div className="grid gap-2">
                             <Label htmlFor="gpu" className="text-gray-700">
-                              GPU Model
+                              GPU
                             </Label>
-                            <Select
+                            <Input
+                              id="gpu"
                               value={newMinerConfig.gpu}
-                              onValueChange={(value) => setNewMinerConfig((prev) => ({ ...prev, gpu: value }))}
-                            >
-                              <SelectTrigger className="bg-white border-gray-300 text-gray-900">
-                                <SelectValue placeholder="Select GPU" />
-                              </SelectTrigger>
-                              <SelectContent className="bg-white border-gray-200">
-                                <SelectItem value="RTX 4090">RTX 4090</SelectItem>
-                                <SelectItem value="RTX 4080">RTX 4080</SelectItem>
-                                <SelectItem value="RTX 3090">RTX 3090</SelectItem>
-                                <SelectItem value="RTX 3080">RTX 3080</SelectItem>
-                              </SelectContent>
-                            </Select>
+                              onChange={(e) => setNewMinerConfig((prev) => ({ ...prev, gpu: e.target.value }))}
+                              placeholder="RTX 4090"
+                              className="bg-white border-gray-300"
+                            />
                           </div>
                           <div className="grid gap-2">
                             <Label htmlFor="region" className="text-gray-700">
                               Region
                             </Label>
-                            <Select
+                            <Input
+                              id="region"
                               value={newMinerConfig.region}
-                              onValueChange={(value) => setNewMinerConfig((prev) => ({ ...prev, region: value }))}
-                            >
-                              <SelectTrigger className="bg-white border-gray-300 text-gray-900">
-                                <SelectValue placeholder="Select region" />
-                              </SelectTrigger>
-                              <SelectContent className="bg-white border-gray-200">
-                                <SelectItem value="US-West">US West</SelectItem>
-                                <SelectItem value="US-East">US East</SelectItem>
-                                <SelectItem value="EU-Central">EU Central</SelectItem>
-                                <SelectItem value="Asia-Pacific">Asia Pacific</SelectItem>
-                              </SelectContent>
-                            </Select>
+                              onChange={(e) => setNewMinerConfig((prev) => ({ ...prev, region: e.target.value }))}
+                              placeholder="US-West"
+                              className="bg-white border-gray-300"
+                            />
                           </div>
                         </>
                       ) : (
                         <>
                           <div className="grid gap-2">
                             <Label htmlFor="cpu" className="text-gray-700">
-                              CPU Model
+                              CPU
                             </Label>
-                            <Select
+                            <Input
+                              id="cpu"
                               value={newMinerConfig.cpu}
-                              onValueChange={(value) => setNewMinerConfig((prev) => ({ ...prev, cpu: value }))}
-                            >
-                              <SelectTrigger className="bg-white border-gray-300 text-gray-900">
-                                <SelectValue placeholder="Select CPU" />
-                              </SelectTrigger>
-                              <SelectContent className="bg-white border-gray-200">
-                                <SelectItem value="M3 Pro">M3 Pro</SelectItem>
-                                <SelectItem value="M3 Max">M3 Max</SelectItem>
-                                <SelectItem value="M2 Ultra">M2 Ultra</SelectItem>
-                                <SelectItem value="M2 Pro">M2 Pro</SelectItem>
-                                <SelectItem value="M1">M1</SelectItem>
-                              </SelectContent>
-                            </Select>
+                              onChange={(e) => setNewMinerConfig((prev) => ({ ...prev, cpu: e.target.value }))}
+                              placeholder="M3 Pro"
+                              className="bg-white border-gray-300"
+                            />
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="grid gap-2">
-                              <Label htmlFor="cores" className="text-gray-700">
-                                CPU Cores
-                              </Label>
-                              <Input
-                                id="cores"
-                                type="number"
-                                value={newMinerConfig.cores}
-                                onChange={(e) => setNewMinerConfig((prev) => ({ ...prev, cores: e.target.value }))}
-                                placeholder="8"
-                                className="bg-white border-gray-300 text-gray-900"
-                              />
-                            </div>
-                            <div className="grid gap-2">
-                              <Label htmlFor="memory" className="text-gray-700">
-                                Memory
-                              </Label>
-                              <Input
-                                id="memory"
-                                value={newMinerConfig.memory}
-                                onChange={(e) => setNewMinerConfig((prev) => ({ ...prev, memory: e.target.value }))}
-                                placeholder="16GB"
-                                className="bg-white border-gray-300 text-gray-900"
-                              />
-                            </div>
+                          <div className="grid gap-2">
+                            <Label htmlFor="cores" className="text-gray-700">
+                              Cores
+                            </Label>
+                            <Input
+                              id="cores"
+                              value={newMinerConfig.cores}
+                              onChange={(e) => setNewMinerConfig((prev) => ({ ...prev, cores: e.target.value }))}
+                              placeholder="12"
+                              className="bg-white border-gray-300"
+                            />
                           </div>
                         </>
                       )}
                     </div>
                     <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => setShowAddMinerDialog(false)}
-                        className="bg-white border-gray-300"
-                      >
+                      <Button variant="outline" onClick={() => setShowAddMinerDialog(false)}>
                         Cancel
                       </Button>
-                      <Button
-                        onClick={handleAddMiner}
-                        disabled={!newMinerConfig.name.trim()}
-                        className={getThemeClasses(viewMode).button}
-                      >
+                      <Button onClick={handleAddMiner} disabled={!newMinerConfig.name.trim()}>
                         Add Miner
                       </Button>
                     </DialogFooter>
@@ -2588,134 +2558,69 @@ export default function Component() {
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="mac" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 bg-gray-100 border border-gray-200">
-                <TabsTrigger value="mac" className="data-[state=active]:bg-white data-[state=active]:text-gray-900">
-                  <Monitor className="w-4 h-4 mr-2 text-purple-600" />
+              <TabsList className="grid w-full grid-cols-2 bg-gray-100">
+                <TabsTrigger value="mac" className="data-[state=active]:bg-white">
                   Mac Miners ({miners.mac.length})
                 </TabsTrigger>
-                <TabsTrigger value="runpod" className="data-[state=active]:bg-white data-[state=active]:text-gray-900">
-                  <Server className="w-4 h-4 mr-2 text-blue-600" />
+                <TabsTrigger value="runpod" className="data-[state=active]:bg-white">
                   Runpod Miners ({miners.runpod.length})
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="runpod" className="space-y-4">
+              <TabsContent value="mac" className="space-y-4">
                 <div className="grid gap-4">
-                  {miners.runpod.map((miner) => (
-                    <Card key={miner.id} className="bg-white border-gray-200 shadow-sm">
-                      <CardContent className="p-3 sm:p-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-                          <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <Server className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />
-                              <div className="min-w-0 flex-1">
-                                <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
-                                  {miner.name}
-                                </h3>
-                                <p className="text-xs sm:text-sm text-gray-600 truncate">
-                                  {miner.gpu} • {miner.region}
+                  {miners.mac.map((miner) => (
+                    <Card key={miner.id} className="bg-white border-gray-200">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                              <Monitor className="w-5 h-5 text-gray-600" />
+                              <div>
+                                <h3 className="font-medium text-gray-900">{miner.name}</h3>
+                                <p className="text-sm text-gray-600">
+                                  {miner.cpu} • {miner.cores} cores • {miner.memory}
                                 </p>
                               </div>
                             </div>
-                            <Badge className={`${getMinerStatusBadge(miner.status)} border text-xs flex-shrink-0`}>
+                            <Badge className={`${getMinerStatusBadge(miner.status)} border text-xs`}>
                               {miner.status}
                             </Badge>
                           </div>
-                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-                            <div className="text-left sm:text-right">
-                              <div className="text-sm font-medium text-gray-900">{miner.hashRate}</div>
-                              <div className="text-xs text-gray-600">{miner.cost}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-right text-sm">
+                              <div className="font-medium text-gray-900">{miner.hashRate}</div>
+                              <div className="text-gray-600">{miner.uptime}</div>
                             </div>
-                            <div className="flex items-center justify-center gap-2 flex-wrap">
-                              {/* SSH Operation Buttons */}
+                            <div className="flex gap-1">
                               <Button
-                                size="sm"
                                 variant="outline"
-                                onClick={() => handleSSHOperation(miner.id, "runpod", "continue")}
+                                size="sm"
+                                onClick={() => handleSSHOperation(miner.id, "mac", "continue")}
                                 disabled={isOperationInProgress(miner.id, "continue")}
-                                className={`bg-white ${getOperationColor("continue")} p-1.5`}
-                                title="Continue Miner"
+                                className={`${getOperationColor("continue")} p-2`}
                               >
-                                {isOperationInProgress(miner.id, "continue") ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  getOperationIcon("continue")
-                                )}
+                                {getOperationIcon("continue")}
                               </Button>
                               <Button
-                                size="sm"
                                 variant="outline"
-                                onClick={() => handleSSHOperation(miner.id, "runpod", "refresh")}
+                                size="sm"
+                                onClick={() => handleSSHOperation(miner.id, "mac", "refresh")}
                                 disabled={isOperationInProgress(miner.id, "refresh")}
-                                className={`bg-white ${getOperationColor("refresh")} p-1.5`}
-                                title="Refresh Miner"
+                                className={`${getOperationColor("refresh")} p-2`}
                               >
-                                {isOperationInProgress(miner.id, "refresh") ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  getOperationIcon("refresh")
-                                )}
+                                {getOperationIcon("refresh")}
                               </Button>
                               <Button
-                                size="sm"
                                 variant="outline"
-                                onClick={() => handleSSHOperation(miner.id, "runpod", "stop")}
+                                size="sm"
+                                onClick={() => handleSSHOperation(miner.id, "mac", "stop")}
                                 disabled={isOperationInProgress(miner.id, "stop")}
-                                className={`bg-white ${getOperationColor("stop")} p-1.5`}
-                                title="Stop Miner"
+                                className={`${getOperationColor("stop")} p-2`}
                               >
-                                {isOperationInProgress(miner.id, "stop") ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  getOperationIcon("stop")
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openSSHConfig(miner.id, "runpod")}
-                                className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 p-1.5"
-                                title="SSH Config"
-                              >
-                                <Terminal className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openEditMiner("runpod", miner.id)}
-                                className="bg-white border-blue-300 text-blue-700 hover:bg-blue-50 p-1.5"
-                                title="Edit Miner"
-                              >
-                                <Edit className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => triggerDeleteMiner("runpod", miner.id)}
-                                className="bg-white border-red-300 text-red-700 hover:bg-red-50 p-1.5"
-                                title="Remove Miner"
-                              >
-                                <Trash2 className="w-3 h-3" />
+                                {getOperationIcon("stop")}
                               </Button>
                             </div>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 sm:gap-4 mt-3 pt-3 border-t border-gray-200">
-                          <div className="text-center">
-                            <div className="text-xs sm:text-sm font-medium text-gray-900">{miner.uptime}</div>
-                            <div className="text-xs text-gray-600">Uptime</div>
-                          </div>
-                          <div className="text-center">
-                            <div
-                              className={`text-xs sm:text-sm font-medium ${miner.status === "running" ? "text-emerald-600" : "text-red-600"}`}
-                            >
-                              {miner.status === "running" ? (
-                                <Wifi className="w-3 h-3 sm:w-4 sm:h-4 mx-auto" />
-                              ) : (
-                                <WifiOff className="w-3 h-3 sm:w-4 sm:h-4 mx-auto" />
-                              )}
-                            </div>
-                            <div className="text-xs text-gray-600">Connection</div>
                           </div>
                         </div>
                       </CardContent>
@@ -2724,123 +2629,60 @@ export default function Component() {
                 </div>
               </TabsContent>
 
-              <TabsContent value="mac" className="space-y-4">
+              <TabsContent value="runpod" className="space-y-4">
                 <div className="grid gap-4">
-                  {miners.mac.map((miner) => (
-                    <Card key={miner.id} className="bg-white border-gray-200 shadow-sm">
-                      <CardContent className="p-3 sm:p-4">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-                          <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <Monitor className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 flex-shrink-0" />
-                              <div className="min-w-0 flex-1">
-                                <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">
-                                  {miner.name}
-                                </h3>
-                                <p className="text-xs sm:text-sm text-gray-600 truncate">
-                                  {miner.cpu} • {miner.cores} cores • {miner.memory}
+                  {miners.runpod.map((miner) => (
+                    <Card key={miner.id} className="bg-white border-gray-200">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                              <Server className="w-5 h-5 text-gray-600" />
+                              <div>
+                                <h3 className="font-medium text-gray-900">{miner.name}</h3>
+                                <p className="text-sm text-gray-600">
+                                  {miner.gpu} • {miner.region}
                                 </p>
                               </div>
                             </div>
-                            <Badge className={`${getMinerStatusBadge(miner.status)} border text-xs flex-shrink-0`}>
+                            <Badge className={`${getMinerStatusBadge(miner.status)} border text-xs`}>
                               {miner.status}
                             </Badge>
                           </div>
-                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-                            <div className="text-left sm:text-right">
-                              <div className="text-sm font-medium text-gray-900">{miner.hashRate}</div>
-                              <div className="text-xs text-gray-600">Hash Rate</div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-right text-sm">
+                              <div className="font-medium text-gray-900">{miner.hashRate}</div>
+                              <div className="text-gray-600">{miner.cost}</div>
                             </div>
-                            <div className="flex items-center justify-center gap-2 flex-wrap">
-                              {/* SSH Operation Buttons */}
+                            <div className="flex gap-1">
                               <Button
-                                size="sm"
                                 variant="outline"
-                                onClick={() => handleSSHOperation(miner.id, "mac", "continue")}
+                                size="sm"
+                                onClick={() => handleSSHOperation(miner.id, "runpod", "continue")}
                                 disabled={isOperationInProgress(miner.id, "continue")}
-                                className={`bg-white ${getOperationColor("continue")} p-1.5`}
-                                title="Continue Miner"
+                                className={`${getOperationColor("continue")} p-2`}
                               >
-                                {isOperationInProgress(miner.id, "continue") ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  getOperationIcon("continue")
-                                )}
+                                {getOperationIcon("continue")}
                               </Button>
                               <Button
-                                size="sm"
                                 variant="outline"
-                                onClick={() => handleSSHOperation(miner.id, "mac", "refresh")}
+                                size="sm"
+                                onClick={() => handleSSHOperation(miner.id, "runpod", "refresh")}
                                 disabled={isOperationInProgress(miner.id, "refresh")}
-                                className={`bg-white ${getOperationColor("refresh")} p-1.5`}
-                                title="Refresh Miner"
+                                className={`${getOperationColor("refresh")} p-2`}
                               >
-                                {isOperationInProgress(miner.id, "refresh") ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  getOperationIcon("refresh")
-                                )}
+                                {getOperationIcon("refresh")}
                               </Button>
                               <Button
-                                size="sm"
                                 variant="outline"
-                                onClick={() => handleSSHOperation(miner.id, "mac", "stop")}
+                                size="sm"
+                                onClick={() => handleSSHOperation(miner.id, "runpod", "stop")}
                                 disabled={isOperationInProgress(miner.id, "stop")}
-                                className={`bg-white ${getOperationColor("stop")} p-1.5`}
-                                title="Stop Miner"
+                                className={`${getOperationColor("stop")} p-2`}
                               >
-                                {isOperationInProgress(miner.id, "stop") ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  getOperationIcon("stop")
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openSSHConfig(miner.id, "mac")}
-                                className="bg-white border-gray-300 text-gray-700 hover:bg-gray-50 p-1.5"
-                                title="SSH Config"
-                              >
-                                <Terminal className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openEditMiner("mac", miner.id)}
-                                className="bg-white border-blue-300 text-blue-700 hover:bg-blue-50 p-1.5"
-                                title="Edit Miner"
-                              >
-                                <Edit className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => triggerDeleteMiner("mac", miner.id)}
-                                className="bg-white border-red-300 text-red-700 hover:bg-red-50 p-1.5"
-                                title="Remove Miner"
-                              >
-                                <Trash2 className="w-3 h-3" />
+                                {getOperationIcon("stop")}
                               </Button>
                             </div>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 sm:gap-4 mt-3 pt-3 border-t border-gray-200">
-                          <div className="text-center">
-                            <div className="text-xs sm:text-sm font-medium text-gray-900">{miner.uptime}</div>
-                            <div className="text-xs text-gray-600">Uptime</div>
-                          </div>
-                          <div className="text-center">
-                            <div
-                              className={`text-xs sm:text-sm font-medium ${miner.status === "running" ? "text-emerald-600" : "text-red-600"}`}
-                            >
-                              {miner.status === "running" ? (
-                                <Wifi className="w-3 h-3 sm:w-4 sm:h-4 mx-auto" />
-                              ) : (
-                                <WifiOff className="w-3 h-3 sm:w-4 sm:h-4 mx-auto" />
-                              )}
-                            </div>
-                            <div className="text-xs text-gray-600">Connection</div>
                           </div>
                         </div>
                       </CardContent>
@@ -2852,179 +2694,27 @@ export default function Component() {
           </CardContent>
         </Card>
 
-        {/* Edit Miner Dialog */}
-        <Dialog open={showEditMinerDialog} onOpenChange={setShowEditMinerDialog}>
-          <DialogContent className="bg-white border-gray-200">
+        {/* SSH Configuration Dialog */}
+        <Dialog open={showSSHConfigDialog} onOpenChange={setShowSSHConfigDialog}>
+          <DialogContent className="bg-white border-gray-200 max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-gray-900">Edit Miner</DialogTitle>
+              <DialogTitle className="text-gray-900">SSH Configuration</DialogTitle>
               <DialogDescription className="text-gray-600">
-                Modify the details of your {editMinerConfig.type === "runpod" ? "Runpod" : "Mac"} miner
+                Configure SSH settings for {selectedMinerForSSH?.name}
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="edit-miner-name" className="text-gray-700">
-                  Miner Name
+                <Label htmlFor="ssh-host" className="text-gray-700">
+                  Host
                 </Label>
                 <Input
-                  id="edit-miner-name"
-                  value={editMinerConfig.name}
-                  onChange={(e) => setEditMinerConfig((prev) => ({ ...prev, name: e.target.value }))}
-                  placeholder="Enter miner name..."
-                  className="bg-white border-gray-300 text-gray-900"
+                  id="ssh-host"
+                  value={sshConfig.host}
+                  onChange={(e) => setSSHConfig((prev) => ({ ...prev, host: e.target.value }))}
+                  placeholder="192.168.1.100"
+                  className="bg-white border-gray-300"
                 />
-              </div>
-              {editMinerConfig.type === "runpod" ? (
-                <>
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-gpu" className="text-gray-700">
-                      GPU Model
-                    </Label>
-                    <Select
-                      value={editMinerConfig.gpu}
-                      onValueChange={(value) => setEditMinerConfig((prev) => ({ ...prev, gpu: value }))}
-                    >
-                      <SelectTrigger className="bg-white border-gray-300 text-gray-900">
-                        <SelectValue placeholder="Select GPU" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white border-gray-200">
-                        <SelectItem value="RTX 4090">RTX 4090</SelectItem>
-                        <SelectItem value="RTX 4080">RTX 4080</SelectItem>
-                        <SelectItem value="RTX 3090">RTX 3090</SelectItem>
-                        <SelectItem value="RTX 3080">RTX 3080</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-region" className="text-gray-700">
-                      Region
-                    </Label>
-                    <Select
-                      value={editMinerConfig.region}
-                      onValueChange={(value) => setEditMinerConfig((prev) => ({ ...prev, region: value }))}
-                    >
-                      <SelectTrigger className="bg-white border-gray-300 text-gray-900">
-                        <SelectValue placeholder="Select region" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white border-gray-200">
-                        <SelectItem value="US-West">US West</SelectItem>
-                        <SelectItem value="US-East">US East</SelectItem>
-                        <SelectItem value="EU-Central">EU Central</SelectItem>
-                        <SelectItem value="Asia-Pacific">Asia Pacific</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-cpu" className="text-gray-700">
-                      CPU Model
-                    </Label>
-                    <Select
-                      value={editMinerConfig.cpu}
-                      onValueChange={(value) => setEditMinerConfig((prev) => ({ ...prev, cpu: value }))}
-                    >
-                      <SelectTrigger className="bg-white border-gray-300 text-gray-900">
-                        <SelectValue placeholder="Select CPU" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white border-gray-200">
-                        <SelectItem value="M3 Pro">M3 Pro</SelectItem>
-                        <SelectItem value="M3 Max">M3 Max</SelectItem>
-                        <SelectItem value="M2 Ultra">M2 Ultra</SelectItem>
-                        <SelectItem value="M2 Pro">M2 Pro</SelectItem>
-                        <SelectItem value="M1">M1</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="grid gap-2">
-                      <Label htmlFor="edit-cores" className="text-gray-700">
-                        CPU Cores
-                      </Label>
-                      <Input
-                        id="edit-cores"
-                        type="number"
-                        value={editMinerConfig.cores}
-                        onChange={(e) => setEditMinerConfig((prev) => ({ ...prev, cores: e.target.value }))}
-                        placeholder="8"
-                        className="bg-white border-gray-300 text-gray-900"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="edit-memory" className="text-gray-700">
-                        Memory
-                      </Label>
-                      <Input
-                        id="edit-memory"
-                        value={editMinerConfig.memory}
-                        onChange={(e) => setEditMinerConfig((prev) => ({ ...prev, memory: e.target.value }))}
-                        placeholder="16GB"
-                        className="bg-white border-gray-300 text-gray-900"
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setShowEditMinerDialog(false)}
-                className="bg-white border-gray-300"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleEditMiner}
-                disabled={!editMinerConfig.name.trim()}
-                className={getThemeClasses(viewMode).button}
-              >
-                Save Changes
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* SSH Configuration Dialog */}
-        <Dialog open={showSSHConfigDialog} onOpenChange={setShowSSHConfigDialog}>
-          <DialogContent className="bg-white border-gray-200 max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="text-gray-900 flex items-center gap-2">
-                <Terminal className="w-5 h-5 text-blue-600" />
-                SSH Configuration - {selectedMinerForSSH?.name}
-              </DialogTitle>
-              <DialogDescription className="text-gray-600">
-                Configure SSH connection settings for remote miner operations
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="ssh-host" className="text-gray-700">
-                    Host/IP Address
-                  </Label>
-                  <Input
-                    id="ssh-host"
-                    value={sshConfig.host}
-                    onChange={(e) => setSSHConfig((prev) => ({ ...prev, host: e.target.value }))}
-                    placeholder="192.168.1.100 or hostname"
-                    className="bg-white border-gray-300 text-gray-900"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="ssh-port" className="text-gray-700">
-                    Port
-                  </Label>
-                  <Input
-                    id="ssh-port"
-                    type="number"
-                    value={sshConfig.port}
-                    onChange={(e) => setSSHConfig((prev) => ({ ...prev, port: Number.parseInt(e.target.value) || 22 }))}
-                    placeholder="22"
-                    className="bg-white border-gray-300 text-gray-900"
-                  />
-                </div>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="ssh-username" className="text-gray-700">
@@ -3034,99 +2724,29 @@ export default function Component() {
                   id="ssh-username"
                   value={sshConfig.username}
                   onChange={(e) => setSSHConfig((prev) => ({ ...prev, username: e.target.value }))}
-                  placeholder="root or admin"
-                  className="bg-white border-gray-300 text-gray-900"
+                  placeholder="admin"
+                  className="bg-white border-gray-300"
                 />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="ssh-password" className="text-gray-700">
-                  Password (Optional - use private key for better security)
+                  Password
                 </Label>
                 <Input
                   id="ssh-password"
                   type="password"
                   value={sshConfig.password}
                   onChange={(e) => setSSHConfig((prev) => ({ ...prev, password: e.target.value }))}
-                  placeholder="SSH password"
-                  className="bg-white border-gray-300 text-gray-900"
+                  placeholder="Enter password..."
+                  className="bg-white border-gray-300"
                 />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="ssh-private-key" className="text-gray-700">
-                  Private Key (Recommended)
-                </Label>
-                <Textarea
-                  id="ssh-private-key"
-                  value={sshConfig.privateKey}
-                  onChange={(e) => setSSHConfig((prev) => ({ ...prev, privateKey: e.target.value }))}
-                  placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
-                  className="bg-white border-gray-300 text-gray-900 font-mono text-sm"
-                  rows={4}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="ssh-working-dir" className="text-gray-700">
-                  Working Directory
-                </Label>
-                <Input
-                  id="ssh-working-dir"
-                  value={sshConfig.workingDirectory}
-                  onChange={(e) => setSSHConfig((prev) => ({ ...prev, workingDirectory: e.target.value }))}
-                  placeholder="/home/user/miner"
-                  className="bg-white border-gray-300 text-gray-900"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="ssh-process-name" className="text-gray-700">
-                  Process Name
-                </Label>
-                <Input
-                  id="ssh-process-name"
-                  value={sshConfig.processName}
-                  onChange={(e) => setSSHConfig((prev) => ({ ...prev, processName: e.target.value }))}
-                  placeholder="bip38_miner"
-                  className="bg-white border-gray-300 text-gray-900"
-                />
-              </div>
-
-              {/* SSH Commands Preview */}
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <h4 className="font-medium text-gray-900 mb-2">SSH Commands Preview</h4>
-                <div className="space-y-2 text-sm font-mono">
-                  <div>
-                    <span className="text-green-600">Continue:</span>{" "}
-                    <span className="text-gray-700">
-                      cd {sshConfig.workingDirectory} && ./{sshConfig.processName} --resume
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-amber-600">Refresh:</span>{" "}
-                    <span className="text-gray-700">
-                      cd {sshConfig.workingDirectory} && pkill {sshConfig.processName} && ./{sshConfig.processName}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-red-600">Stop:</span>{" "}
-                    <span className="text-gray-700">pkill {sshConfig.processName}</span>
-                  </div>
-                </div>
               </div>
             </div>
             <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setShowSSHConfigDialog(false)}
-                className="bg-white border-gray-300"
-              >
+              <Button variant="outline" onClick={() => setShowSSHConfigDialog(false)}>
                 Cancel
               </Button>
-              <Button
-                onClick={saveSSHConfig}
-                disabled={!sshConfig.host || !sshConfig.username}
-                className={getThemeClasses(viewMode).button}
-              >
-                Save Configuration
-              </Button>
+              <Button onClick={saveSSHConfig}>Save Configuration</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -3138,36 +2758,102 @@ export default function Component() {
         >
           <DialogContent className="bg-white border-gray-200">
             <DialogHeader>
-              <DialogTitle className="text-gray-900 flex items-center gap-2">
-                <Trash2 className="w-5 h-5 text-red-600" />
-                Remove Miner
-              </DialogTitle>
+              <DialogTitle className="text-gray-900">Delete Miner</DialogTitle>
               <DialogDescription className="text-gray-600">
-                Are you sure you want to remove "{deleteConfirmDialog.minerName}"? This action cannot be undone.
+                Are you sure you want to delete "{deleteConfirmDialog.minerName}"? This action cannot be undone.
               </DialogDescription>
             </DialogHeader>
-            <div className="py-4">
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <div className="flex items-center gap-2 text-red-700 text-sm">
-                  <Trash2 className="w-4 h-4" />
-                  <span className="font-medium">Warning:</span>
-                </div>
-                <p className="text-red-600 text-sm mt-1">
-                  Removing this miner will stop all current operations and remove it from your fleet permanently.
-                </p>
-              </div>
-            </div>
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => setDeleteConfirmDialog((prev) => ({ ...prev, show: false }))}
-                className="bg-white border-gray-300"
+                onClick={() => setDeleteConfirmDialog({ show: false, minerType: null, minerId: null, minerName: null })}
               >
                 Cancel
               </Button>
-              <Button onClick={deleteMiner} className="bg-red-600 hover:bg-red-700 text-white">
-                <Trash2 className="w-4 h-4 mr-2" />
-                Remove Miner
+              <Button onClick={confirmDeleteMiner} className="bg-red-600 hover:bg-red-700">
+                Delete Miner
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Miner Dialog */}
+        <Dialog open={showEditMinerDialog} onOpenChange={setShowEditMinerDialog}>
+          <DialogContent className="bg-white border-gray-200">
+            <DialogHeader>
+              <DialogTitle className="text-gray-900">Edit Miner</DialogTitle>
+              <DialogDescription className="text-gray-600">Update miner configuration</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-name" className="text-gray-700">
+                  Name
+                </Label>
+                <Input
+                  id="edit-name"
+                  value={editMinerConfig.name}
+                  onChange={(e) => setEditMinerConfig((prev) => ({ ...prev, name: e.target.value }))}
+                  className="bg-white border-gray-300"
+                />
+              </div>
+              {editMinerConfig.type === "runpod" ? (
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-gpu" className="text-gray-700">
+                      GPU
+                    </Label>
+                    <Input
+                      id="edit-gpu"
+                      value={editMinerConfig.gpu}
+                      onChange={(e) => setEditMinerConfig((prev) => ({ ...prev, gpu: e.target.value }))}
+                      className="bg-white border-gray-300"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-region" className="text-gray-700">
+                      Region
+                    </Label>
+                    <Input
+                      id="edit-region"
+                      value={editMinerConfig.region}
+                      onChange={(e) => setEditMinerConfig((prev) => ({ ...prev, region: e.target.value }))}
+                      className="bg-white border-gray-300"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-cpu" className="text-gray-700">
+                      CPU
+                    </Label>
+                    <Input
+                      id="edit-cpu"
+                      value={editMinerConfig.cpu}
+                      onChange={(e) => setEditMinerConfig((prev) => ({ ...prev, cpu: e.target.value }))}
+                      className="bg-white border-gray-300"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-cores" className="text-gray-700">
+                      Cores
+                    </Label>
+                    <Input
+                      id="edit-cores"
+                      value={editMinerConfig.cores}
+                      onChange={(e) => setEditMinerConfig((prev) => ({ ...prev, cores: e.target.value }))}
+                      className="bg-white border-gray-300"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowEditMinerDialog(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleEditMiner} disabled={!editMinerConfig.name.trim()}>
+                Save Changes
               </Button>
             </DialogFooter>
           </DialogContent>
