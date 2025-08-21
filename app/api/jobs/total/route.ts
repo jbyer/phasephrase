@@ -5,7 +5,7 @@ export async function GET() {
     console.log("[v0] Starting total jobs API request")
 
     // Check if we have a DATABASE_URL connection string for direct connection
-    const databaseUrl = process.env.DATABASE_URL
+    const databaseUrl = postgresql://contact:Year20careful!@192.168.100.67:5432/btcr_prod
     const fallbackJobCount = process.env.FALLBACK_JOB_COUNT || "10654046303"
 
     if (databaseUrl) {
