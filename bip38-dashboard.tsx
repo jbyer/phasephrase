@@ -41,6 +41,7 @@ import { Switch } from "@/components/ui/switch"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Monitor, Server } from "lucide-react"
+import { Edit } from "lucide-react"
 
 // File upload types and interfaces
 interface UploadedFile {
@@ -477,6 +478,14 @@ export default function Component() {
 
   const [databaseWorkers, setDatabaseWorkers] = useState([])
   const [workersLastUpdate, setWorkersLastUpdate] = useState<Date | null>(null)
+
+  const [showEditWorkerDialog, setShowEditWorkerDialog] = useState(false)
+  const [editWorkerConfig, setEditWorkerConfig] = useState({
+    id: "",
+    name: "",
+    state: "",
+    wallet_id: "",
+  })
 
   const handleDatabaseSearch = async (loadMore = false) => {
     if (!searchTerm.trim()) {
@@ -1383,6 +1392,32 @@ export default function Component() {
     }
   }
 
+  const handleEditWorker = () => {
+    if (editWorkerConfig.name.trim() && editWorkerConfig.id) {
+      setDatabaseWorkers((prev) =>
+        prev.map((worker) => {
+          if (worker.id.toString() === editWorkerConfig.id) {
+            return {
+              ...worker,
+              name: editWorkerConfig.name,
+              state: editWorkerConfig.state || worker.state,
+              wallet_id: Number.parseInt(editWorkerConfig.wallet_id) || worker.wallet_id,
+            }
+          }
+          return worker
+        }),
+      )
+
+      setEditWorkerConfig({
+        id: "",
+        name: "",
+        state: "",
+        wallet_id: "",
+      })
+      setShowEditWorkerDialog(false)
+    }
+  }
+
   const openEditMiner = (type: "runpod" | "mac", minerId: string) => {
     const miner = miners[type].find((m) => m.id === minerId)
     if (miner) {
@@ -1410,6 +1445,19 @@ export default function Component() {
         })
       }
       setShowEditMinerDialog(true)
+    }
+  }
+
+  const openEditWorker = (workerId: string) => {
+    const worker = databaseWorkers.find((w) => w.id.toString() === workerId)
+    if (worker) {
+      setEditWorkerConfig({
+        id: workerId,
+        name: worker.name,
+        state: worker.state,
+        wallet_id: worker.wallet_id.toString(),
+      })
+      setShowEditWorkerDialog(true)
     }
   }
 
@@ -1602,7 +1650,6 @@ export default function Component() {
             </Button>
           </Alert>
         )}
-
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -1701,7 +1748,6 @@ export default function Component() {
             </div>
           </div>
         </div>
-
         {/* View Mode Toggle */}
         <Card
           className={`${getThemeClasses(viewMode).card} ${getThemeClasses(viewMode).cardHover} transition-all duration-200`}
@@ -1735,7 +1781,6 @@ export default function Component() {
             </div>
           </CardContent>
         </Card>
-
         {/* Control Panel */}
         <Card className={getThemeClasses(viewMode).card}>
           <CardContent className="p-3 sm:p-4">
@@ -1770,7 +1815,6 @@ export default function Component() {
             </div>
           </CardContent>
         </Card>
-
         {/* Main Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
           {/* Miners Working */}
@@ -1864,7 +1908,6 @@ export default function Component() {
             </CardContent>
           </Card>
         </div>
-
         {/* Passphrase Management */}
         <Card className={getThemeClasses(viewMode).card}>
           <CardHeader>
@@ -2515,7 +2558,6 @@ export default function Component() {
             )}
           </CardContent>
         </Card>
-
         {/* Miner Management */}
         <Card className={getThemeClasses(viewMode).card}>
           <CardHeader>
@@ -2691,6 +2733,14 @@ export default function Component() {
                                   <Button
                                     variant="outline"
                                     size="sm"
+                                    onClick={() => openEditWorker(worker.id.toString())}
+                                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200 p-2"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
                                     onClick={() => handleSSHOperation(worker.id, "mac", "continue")}
                                     disabled={isOperationInProgress(worker.id, "continue")}
                                     className={`${getOperationColor("continue")} p-2`}
@@ -2860,7 +2910,6 @@ export default function Component() {
             </Tabs>
           </CardContent>
         </Card>
-
         {/* SSH Configuration Dialog */}
         <Dialog open={showSSHConfigDialog} onOpenChange={setShowSSHConfigDialog}>
           <DialogContent className="bg-white border-gray-200 max-w-md">
@@ -2917,7 +2966,6 @@ export default function Component() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
         {/* Delete Confirmation Dialog */}
         <Dialog
           open={deleteConfirmDialog.show}
@@ -2943,7 +2991,6 @@ export default function Component() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
         <Dialog
           open={deleteWorkerDialog.show}
           onOpenChange={(open) => setDeleteWorkerDialog((prev) => ({ ...prev, show: open }))}
@@ -2964,6 +3011,60 @@ export default function Component() {
               </Button>
               <Button onClick={confirmDeleteWorker} className="bg-red-600 hover:bg-red-700">
                 Delete Worker
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        // Added edit worker dialog
+        <Dialog open={showEditWorkerDialog} onOpenChange={setShowEditWorkerDialog}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Edit Database Worker</DialogTitle>
+              <DialogDescription>Update the details of the selected database worker.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="worker-name" className="text-right">
+                  Name
+                </Label>
+                <Input
+                  id="worker-name"
+                  value={editWorkerConfig.name}
+                  onChange={(e) => setEditWorkerConfig((prev) => ({ ...prev, name: e.target.value }))}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="worker-state" className="text-right">
+                  State
+                </Label>
+                <select
+                  id="worker-state"
+                  value={editWorkerConfig.state}
+                  onChange={(e) => setEditWorkerConfig((prev) => ({ ...prev, state: e.target.value }))}
+                  className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="running">Running</option>
+                  <option value="idle">Idle</option>
+                  <option value="stopped">Stopped</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="worker-wallet-id" className="text-right">
+                  Wallet ID
+                </Label>
+                <Input
+                  id="worker-wallet-id"
+                  type="number"
+                  value={editWorkerConfig.wallet_id}
+                  onChange={(e) => setEditWorkerConfig((prev) => ({ ...prev, wallet_id: e.target.value }))}
+                  className="col-span-3"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit" onClick={handleEditWorker}>
+                Save Changes
               </Button>
             </DialogFooter>
           </DialogContent>
