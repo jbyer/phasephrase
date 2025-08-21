@@ -436,6 +436,16 @@ export default function Component() {
     minerName: null,
   })
 
+  const [deleteWorkerDialog, setDeleteWorkerDialog] = useState<{
+    show: boolean
+    workerId: string | null
+    workerName: string | null
+  }>({
+    show: false,
+    workerId: null,
+    workerName: null,
+  })
+
   const [showAlertDetailsDialog, setShowAlertDetailsDialog] = useState(false)
 
   const [realTimeActiveMiners, setRealTimeActiveMiners] = useState<number | null>(null)
@@ -1434,6 +1444,27 @@ export default function Component() {
       minerType: null,
       minerId: null,
       minerName: null,
+    })
+  }
+
+  const triggerDeleteWorker = (workerId: string) => {
+    const worker = databaseWorkers.find((w: any) => w.id === workerId)
+    setDeleteWorkerDialog({
+      show: true,
+      workerId: workerId,
+      workerName: worker?.name || "Unknown Worker",
+    })
+  }
+
+  const confirmDeleteWorker = () => {
+    if (deleteWorkerDialog.workerId) {
+      setDatabaseWorkers((prev) => prev.filter((worker: any) => worker.id !== deleteWorkerDialog.workerId))
+    }
+
+    setDeleteWorkerDialog({
+      show: false,
+      workerId: null,
+      workerName: null,
     })
   }
 
@@ -2684,6 +2715,14 @@ export default function Component() {
                                   >
                                     {getOperationIcon("stop")}
                                   </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => triggerDeleteWorker(worker.id)}
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 p-2"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
                                 </div>
                               </div>
                             </div>
@@ -2905,83 +2944,26 @@ export default function Component() {
           </DialogContent>
         </Dialog>
 
-        {/* Edit Miner Dialog */}
-        <Dialog open={showEditMinerDialog} onOpenChange={setShowEditMinerDialog}>
+        <Dialog
+          open={deleteWorkerDialog.show}
+          onOpenChange={(open) => setDeleteWorkerDialog((prev) => ({ ...prev, show: open }))}
+        >
           <DialogContent className="bg-white border-gray-200">
             <DialogHeader>
-              <DialogTitle className="text-gray-900">Edit Miner</DialogTitle>
-              <DialogDescription className="text-gray-600">Update miner configuration</DialogDescription>
+              <DialogTitle className="text-gray-900">Delete Worker</DialogTitle>
+              <DialogDescription className="text-gray-600">
+                Are you sure you want to delete "{deleteWorkerDialog.workerName}"? This action cannot be undone.
+              </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-name" className="text-gray-700">
-                  Name
-                </Label>
-                <Input
-                  id="edit-name"
-                  value={editMinerConfig.name}
-                  onChange={(e) => setEditMinerConfig((prev) => ({ ...prev, name: e.target.value }))}
-                  className="bg-white border-gray-300"
-                />
-              </div>
-              {editMinerConfig.type === "runpod" ? (
-                <>
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-gpu" className="text-gray-700">
-                      GPU
-                    </Label>
-                    <Input
-                      id="edit-gpu"
-                      value={editMinerConfig.gpu}
-                      onChange={(e) => setEditMinerConfig((prev) => ({ ...prev, gpu: e.target.value }))}
-                      className="bg-white border-gray-300"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-region" className="text-gray-700">
-                      Region
-                    </Label>
-                    <Input
-                      id="edit-region"
-                      value={editMinerConfig.region}
-                      onChange={(e) => setEditMinerConfig((prev) => ({ ...prev, region: e.target.value }))}
-                      className="bg-white border-gray-300"
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-cpu" className="text-gray-700">
-                      CPU
-                    </Label>
-                    <Input
-                      id="edit-cpu"
-                      value={editMinerConfig.cpu}
-                      onChange={(e) => setEditMinerConfig((prev) => ({ ...prev, cpu: e.target.value }))}
-                      className="bg-white border-gray-300"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="edit-cores" className="text-gray-700">
-                      Cores
-                    </Label>
-                    <Input
-                      id="edit-cores"
-                      value={editMinerConfig.cores}
-                      onChange={(e) => setEditMinerConfig((prev) => ({ ...prev, cores: e.target.value }))}
-                      className="bg-white border-gray-300"
-                    />
-                  </div>
-                </>
-              )}
-            </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowEditMinerDialog(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setDeleteWorkerDialog({ show: false, workerId: null, workerName: null })}
+              >
                 Cancel
               </Button>
-              <Button onClick={handleEditMiner} disabled={!editMinerConfig.name.trim()}>
-                Save Changes
+              <Button onClick={confirmDeleteWorker} className="bg-red-600 hover:bg-red-700">
+                Delete Worker
               </Button>
             </DialogFooter>
           </DialogContent>
