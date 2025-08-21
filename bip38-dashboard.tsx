@@ -1457,7 +1457,7 @@ export default function Component() {
       case "stopped":
         return "bg-red-100 text-red-700 border-red-200"
       case "idle":
-        return "bg-amber-100 text-amber-200"
+        return "bg-amber-100 text-amber-700 border-amber-200"
       default:
         return "bg-gray-100 text-gray-700 border-gray-200"
     }
