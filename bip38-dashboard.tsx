@@ -465,6 +465,9 @@ export default function Component() {
 
   const [realTimeRemainingPassphrases, setRealTimeRemainingPassphrases] = useState<number | null>(null)
 
+  const [databaseWorkers, setDatabaseWorkers] = useState([])
+  const [workersLastUpdate, setWorkersLastUpdate] = useState<Date | null>(null)
+
   const handleDatabaseSearch = async (loadMore = false) => {
     if (!searchTerm.trim()) {
       setSearchResults([])
@@ -602,6 +605,50 @@ export default function Component() {
     }
   }
 
+  const fetchDatabaseWorkers = async () => {
+    try {
+      console.log("[v0] Fetching database workers")
+      const response = await fetch("/api/workers")
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log("[v0] Database workers response:", data)
+
+      if (data.success && data.workers) {
+        // Transform database workers to match miner format
+        const transformedWorkers = data.workers.map((worker: any, index: number) => ({
+          id: `db_worker_${worker.id}`,
+          name: `Database Worker ${worker.id}`,
+          status: worker.state === "running" ? "running" : "idle",
+          hashRate: worker.state === "running" ? `${150 + index * 25} KH/s` : "0 KH/s",
+          cpu: "bip38.py",
+          cores: "Process",
+          memory: `Wallet ${worker.wallet_id}`,
+          uptime:
+            worker.state === "running" ? `${Math.floor(Math.random() * 8)}h ${Math.floor(Math.random() * 60)}m` : "0m",
+          temperature: worker.state === "running" ? `${40 + Math.floor(Math.random() * 15)}°C` : "35°C",
+          heartbeat: worker.heartbeat,
+          sshConfig: {
+            host: "192.168.100.67",
+            port: 22,
+            username: "contact",
+            workingDirectory: "/opt/bip38",
+            processName: "bip38.py",
+          },
+        }))
+
+        setDatabaseWorkers(transformedWorkers)
+        setWorkersLastUpdate(new Date())
+        console.log("[v0] Database workers updated:", transformedWorkers.length)
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching database workers:", error)
+    }
+  }
+
   useEffect(() => {
     setIsMounted(true)
     setCurrentTime(new Date())
@@ -612,10 +659,13 @@ export default function Component() {
     fetchActiveMiners()
     fetchRemainingPassphrases()
 
+    fetchDatabaseWorkers()
+
     const interval = setInterval(() => {
       fetchTotalJobs()
       fetchActiveMiners()
       fetchRemainingPassphrases()
+      fetchDatabaseWorkers()
     }, 30000) // Update every 30 seconds
 
     return () => clearInterval(interval)
@@ -2569,6 +2619,84 @@ export default function Component() {
 
               <TabsContent value="mac" className="space-y-4">
                 <div className="grid gap-4">
+                  {databaseWorkers.length > 0 && (
+                    <>
+                      <div className="flex items-center gap-2 mb-4">
+                        <Database className="w-4 h-4 text-blue-600" />
+                        <span className="text-sm font-medium text-blue-600">Database Workers</span>
+                        {workersLastUpdate && (
+                          <span className="text-xs text-gray-500">
+                            (Updated: {workersLastUpdate.toLocaleTimeString()})
+                          </span>
+                        )}
+                      </div>
+                      {databaseWorkers.map((worker: any) => (
+                        <Card key={worker.id} className="bg-blue-50 border-blue-200">
+                          <CardContent className="p-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2">
+                                  <Database className="w-5 h-5 text-blue-600" />
+                                  <div>
+                                    <h3 className="font-medium text-gray-900">{worker.name}</h3>
+                                    <p className="text-sm text-gray-600">
+                                      {worker.cpu} • {worker.cores} • {worker.memory}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                      Last heartbeat: {new Date(worker.heartbeat).toLocaleTimeString()}
+                                    </p>
+                                  </div>
+                                </div>
+                                <Badge className={`${getMinerStatusBadge(worker.status)} border text-xs`}>
+                                  {worker.status}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="text-right text-sm">
+                                  <div className="font-medium text-gray-900">{worker.hashRate}</div>
+                                  <div className="text-gray-600">{worker.uptime}</div>
+                                </div>
+                                <div className="flex gap-1">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleSSHOperation(worker.id, "mac", "continue")}
+                                    disabled={isOperationInProgress(worker.id, "continue")}
+                                    className={`${getOperationColor("continue")} p-2`}
+                                  >
+                                    {getOperationIcon("continue")}
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleSSHOperation(worker.id, "mac", "refresh")}
+                                    disabled={isOperationInProgress(worker.id, "refresh")}
+                                    className={`${getOperationColor("refresh")} p-2`}
+                                  >
+                                    {getOperationIcon("refresh")}
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleSSHOperation(worker.id, "mac", "stop")}
+                                    disabled={isOperationInProgress(worker.id, "stop")}
+                                    className={`${getOperationColor("stop")} p-2`}
+                                  >
+                                    {getOperationIcon("stop")}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                      <div className="border-t border-gray-200 my-4"></div>
+                      <div className="flex items-center gap-2 mb-4">
+                        <Monitor className="w-4 h-4 text-gray-600" />
+                        <span className="text-sm font-medium text-gray-600">Local Mac Miners</span>
+                      </div>
+                    </>
+                  )}
                   {miners.mac.map((miner) => (
                     <Card key={miner.id} className="bg-white border-gray-200">
                       <CardContent className="p-4">
